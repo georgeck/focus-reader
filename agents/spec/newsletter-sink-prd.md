@@ -16,6 +16,8 @@ Email newsletters are a valuable source of curated information, but subscribing 
 
 **Focus Reader** is a self-hosted system that provides a dedicated ingestion pipeline for email newsletters using pseudo email addresses, converts them into clean readable formats (HTML and Markdown), and presents them in an RSS-reader-like interface with support for tagging, categorization, and search.
 
+> **Definition of "self-hosted":** In this context, self-hosted means deploying the application to an individual's own Cloudflare account (using Workers, D1, Pages, etc.) in a single-tenant, non-SaaS configuration. The user owns and operates the infrastructure; there is no shared multi-tenant service.
+
 ### 1.3 Goals
 
 - Eliminate newsletter clutter from the user's primary inbox.
@@ -63,16 +65,17 @@ A single power user (the system operator) who subscribes to many email newslette
                                                    └──────────────────┘
 ```
 
-### 3.2 Recommended Stack
+### 3.2 Stack
 
-| Layer             | Technology                                            | Rationale                                                                           |
-|-------------------|-------------------------------------------------------|-------------------------------------------------------------------------------------|
-| Email Ingestion   | Cloudflare Email Workers                              | Zero server management, programmable hooks on inbound email, free at personal scale |
-| Database          | Cloudflare D1 (SQLite)                                | D1 for all-Cloudflare stack                                                         |
-| Web UI            | Cloudflare Pages or self-hosted (Next.js / SvelteKit) | Static-first with API routes; low cost                                              |
-| Email Parsing     | `postal-mime` / `mailparser`                          | MIME parsing and HTML body extraction                                               |
-| HTML → Markdown   | Turndown / `html-to-markdown`                         | Well-maintained conversion libraries                                                |
-| HTML Sanitization | DOMPurify / `sanitize-html`                           | Remove unsafe/tracking elements from newsletter HTML                                |
+| Layer             | Technology                  | Rationale                                                                                            |
+|-------------------|-----------------------------|------------------------------------------------------------------------------------------------------|
+| Email Ingestion   | Cloudflare Email Workers    | Zero server management, programmable hooks on inbound email, free at personal scale                  |
+| Database          | Cloudflare D1 (SQLite)      | D1 for all-Cloudflare stack                                                                          |
+| Web UI            | Next.js on Cloudflare Pages | Rich ecosystem, API routes, deployed via `@cloudflare/next-on-pages`                                 |
+| Email Parsing     | `postal-mime`               | Works natively in Workers (no Node.js APIs). Used in Cloudflare's own examples                       |
+| HTML → Markdown   | Turndown                    | Well-maintained HTML-to-Markdown conversion library                                                  |
+| HTML Sanitization | DOMPurify + `linkedom`      | DOMPurify is the gold standard; `linkedom` provides the DOM shim needed in Workers                   |
+| Authentication    | Cloudflare Access           | Zero-trust, no auth code to write, free for up to 50 users, supports email OTP / GitHub / Google SSO |
 
 ### 3.3 Email Addressing Strategy
 
@@ -82,6 +85,7 @@ Use a **catch-all configuration on a dedicated subdomain** (e.g., `*@read.yourdo
 - The local part (before `@`) implicitly identifies the subscription.
 - No pre-configuration needed — any new address auto-creates a subscription on first email received.
 - Optionally support `+` subaddressing for additional metadata: `tech+ai@read.yourdomain.com`.
+- The domain is configured via an environment variable (`EMAIL_DOMAIN`) in `wrangler.toml`, keeping the code portable and domain-agnostic.
 
 ---
 
@@ -89,49 +93,70 @@ Use a **catch-all configuration on a dedicated subdomain** (e.g., `*@read.yourdo
 
 ### 4.1 Core Entities
 
+> **Implementation notes:** All UUIDs are stored as `TEXT` columns using `crypto.randomUUID()`. Tags use normalized join tables (`subscription_tags`, `issue_tags`) rather than array columns, since D1/SQLite does not support array types.
+
 #### Subscription
 
 | Field            | Type            | Description                                                          |
 |------------------|-----------------|----------------------------------------------------------------------|
-| `id`             | UUID            | Primary key                                                          |
-| `pseudo_email`   | string (unique) | The generated email address (e.g., `techweekly@read.yourdomain.com`) |
-| `display_name`   | string          | Human-readable name for the subscription                             |
-| `sender_address` | string          | The `From` address of the newsletter                                 |
-| `sender_name`    | string          | The `From` display name                                              |
-| `tags`           | string[]        | User-assigned tags/categories                                        |
-| `is_active`      | boolean         | Whether this subscription is currently active                        |
-| `auto_tag_rules` | JSON            | Optional rules for auto-tagging incoming issues                      |
-| `created_at`     | timestamp       | When the subscription was first seen                                 |
-| `updated_at`     | timestamp       | Last update time                                                     |
+| `id`             | TEXT (UUID)     | Primary key, generated via `crypto.randomUUID()`                     |
+| `pseudo_email`   | TEXT (unique)   | The generated email address (e.g., `techweekly@read.yourdomain.com`) |
+| `display_name`   | TEXT            | Human-readable name for the subscription                             |
+| `sender_address` | TEXT            | The `From` address of the newsletter                                 |
+| `sender_name`    | TEXT            | The `From` display name                                              |
+| `is_active`      | INTEGER (bool)  | Whether this subscription is currently active                        |
+| `auto_tag_rules` | TEXT (JSON)     | Optional rules for auto-tagging incoming issues                      |
+| `created_at`     | TEXT (ISO 8601) | When the subscription was first seen                                 |
+| `updated_at`     | TEXT (ISO 8601) | Last update time                                                     |
 
 #### Issue (Individual Newsletter)
 
-| Field                | Type      | Description                                       |
-|----------------------|-----------|---------------------------------------------------|
-| `id`                 | UUID      | Primary key                                       |
-| `subscription_id`    | UUID (FK) | Link to parent subscription                       |
-| `subject`            | string    | Email subject line                                |
-| `from_address`       | string    | Sender email                                      |
-| `from_name`          | string    | Sender display name                               |
-| `received_at`        | timestamp | When the email was received                       |
-| `html_content`       | text      | Sanitized HTML body                               |
-| `markdown_content`   | text      | Converted Markdown body                           |
-| `plain_text_content` | text      | Plain text fallback                               |
-| `raw_headers`        | JSON      | Original email headers (for debugging)            |
-| `tags`               | string[]  | Tags (inherited from subscription + auto-applied) |
-| `is_read`            | boolean   | Read status                                       |
-| `is_starred`         | boolean   | Starred/bookmarked status                         |
-| `summary`            | text      | Optional LLM-generated summary                    |
+| Field                | Type            | Description                                                       |
+|----------------------|-----------------|-------------------------------------------------------------------|
+| `id`                 | TEXT (UUID)     | Primary key, generated via `crypto.randomUUID()`                  |
+| `subscription_id`    | TEXT (FK)       | Link to parent subscription                                       |
+| `message_id`         | TEXT (unique)   | Email `Message-ID` header, used for deduplication                 |
+| `subject`            | TEXT            | Email subject line                                                |
+| `from_address`       | TEXT            | Sender email                                                      |
+| `from_name`          | TEXT            | Sender display name                                               |
+| `received_at`        | TEXT (ISO 8601) | When the email was received                                       |
+| `html_content`       | TEXT            | Sanitized HTML body                                               |
+| `markdown_content`   | TEXT            | Converted Markdown body                                           |
+| `plain_text_content` | TEXT            | Plain text fallback                                               |
+| `raw_headers`        | TEXT (JSON)     | Original email headers (for debugging)                            |
+| `is_read`            | INTEGER (bool)  | Read status                                                       |
+| `is_starred`         | INTEGER (bool)  | Starred/bookmarked status                                         |
+| `is_rejected`        | INTEGER (bool)  | Whether the email failed validation (empty body, spam). Default 0 |
+| `rejection_reason`   | TEXT            | Why the email was flagged (null if not rejected)                  |
+| `summary`            | TEXT            | Optional LLM-generated summary                                    |
 
 #### Tag
 
 | Field         | Type            | Description          |
 |---------------|-----------------|----------------------|
-| `id`          | UUID            | Primary key          |
-| `name`        | string (unique) | Tag name             |
-| `color`       | string          | Display color (hex)  |
-| `description` | string          | Optional description |
-| `created_at`  | timestamp       | Creation time        |
+| `id`          | TEXT (UUID)     | Primary key          |
+| `name`        | TEXT (unique)   | Tag name             |
+| `color`       | TEXT            | Display color (hex)  |
+| `description` | TEXT            | Optional description |
+| `created_at`  | TEXT (ISO 8601) | Creation time        |
+
+#### Subscription_Tags (Join Table)
+
+| Field             | Type      | Description                |
+|-------------------|-----------|----------------------------|
+| `subscription_id` | TEXT (FK) | References `subscription`  |
+| `tag_id`          | TEXT (FK) | References `tag`           |
+
+Primary key: (`subscription_id`, `tag_id`)
+
+#### Issue_Tags (Join Table)
+
+| Field      | Type      | Description        |
+|------------|-----------|--------------------|
+| `issue_id` | TEXT (FK) | References `issue` |
+| `tag_id`   | TEXT (FK) | References `tag`   |
+
+Primary key: (`issue_id`, `tag_id`)
 
 ---
 
@@ -151,7 +176,7 @@ Use a **catch-all configuration on a dedicated subdomain** (e.g., `*@read.yourdo
 - Convert sanitized HTML to Markdown.
 - If no matching subscription exists for the recipient address, auto-create one using the local part as the display name and the sender info from the email.
 - Store the parsed issue in the database linked to the subscription.
-- Reject or discard emails that fail basic validation (empty body, known spam patterns).
+- Store emails that fail basic validation (empty body, known spam patterns) with `is_rejected = true` and a `rejection_reason`. These are hidden from the default feed view but can be inspected by the user to catch false positives.
 
 **Edge Cases:**
 
@@ -329,7 +354,7 @@ Use a **catch-all configuration on a dedicated subdomain** (e.g., `*@read.yourdo
 
 ### 7.4 Security
 
-- The reader UI must be behind authentication (even if single-user). Options: Cloudflare Access, basic auth, or a simple session-based login.
+- The reader UI is protected by **Cloudflare Access** (zero-trust). No application-level auth code is required. The operator configures an Access policy for the Pages domain.
 - RSS feed URLs must include an unguessable token to prevent unauthorized access.
 - Email ingestion should rate-limit and validate inbound messages to prevent abuse of the catch-all address.
 
@@ -345,18 +370,13 @@ Use a **catch-all configuration on a dedicated subdomain** (e.g., `*@read.yourdo
 
 ---
 
-## 9. Open Questions
+## 9. Resolved Design Decisions
 
-1. **Image handling:** Should newsletter images be proxied/cached locally, or hotlinked from original sources? Hotlinking is simpler but breaks if the source removes images and leaks IP/reading activity to the sender.
-   Answer: Start with hotlinking for simplicity. Consider local cache layer in Phase 2.
-2. **Multi-device sync:** Is read/unread state syncing across devices a requirement for v1, or can it be deferred?
-    Answer: The read/unread state is stored in the database and exposed via the UI, so it will be consistent across devices.
-3. **Unsubscribe handling:** Should the system parse `List-Unsubscribe` headers and provide a one-click unsubscribe action in the UI?
-   Answer: Yes, this is a common feature in email clients and should be implemented in Phase 3.
-4. **Retention policy:** Should old issues be auto-archived or deleted after a configurable period?
-    Answer: Not required for now
-5. **Import/export:** Should the system support OPML import (from existing RSS readers) or export of stored content?
-    Answer: Not required for v1, but we can revisit this when we implement RSS subscription features.
+1. **Image handling:** Start with hotlinking from original sources for simplicity. A local proxy/cache layer will be considered in Phase 2 to address link rot and privacy concerns.
+2. **Multi-device sync:** Read/unread state is stored in the database and exposed via the UI, so it is inherently consistent across devices. No additional sync mechanism is needed.
+3. **Unsubscribe handling:** The system will parse `List-Unsubscribe` headers and provide a one-click unsubscribe action in the UI, planned for Phase 3.
+4. **Retention policy:** No automatic archival or deletion of old issues. All content is retained indefinitely.
+5. **Import/export:** Not required for v1. Will be revisited when RSS subscription features are implemented.
 
 ---
 
