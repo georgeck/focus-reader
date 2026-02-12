@@ -87,6 +87,13 @@ Use a **catch-all configuration on a dedicated subdomain** (e.g., `*@read.yourdo
 - Optionally support `+` subaddressing for additional metadata: `tech+ai@read.yourdomain.com`.
 - The domain is configured via an environment variable (`EMAIL_DOMAIN`) in `wrangler.toml`, keeping the code portable and domain-agnostic.
 
+**Normalization and routing rules:**
+
+- Recipient matching is case-insensitive.
+- The canonical subscription key is the full local part by default (e.g., `tech` and `tech+ai` are treated as different subscriptions).
+- Optional plus-alias collapsing (`tech+ai` → `tech`) is configurable via `COLLAPSE_PLUS_ALIAS=false` (default: off).
+- Auto-created subscription `display_name` is the slug-decoded local part with separators (`-`, `_`, `+`) converted to spaces (e.g., `morning-brew` → `morning brew`).
+
 ---
 
 ## 4. Data Model
@@ -97,38 +104,42 @@ Use a **catch-all configuration on a dedicated subdomain** (e.g., `*@read.yourdo
 
 #### Subscription
 
-| Field            | Type            | Description                                                          |
-|------------------|-----------------|----------------------------------------------------------------------|
-| `id`             | TEXT (UUID)     | Primary key, generated via `crypto.randomUUID()`                     |
-| `pseudo_email`   | TEXT (unique)   | The generated email address (e.g., `techweekly@read.yourdomain.com`) |
-| `display_name`   | TEXT            | Human-readable name for the subscription                             |
-| `sender_address` | TEXT            | The `From` address of the newsletter                                 |
-| `sender_name`    | TEXT            | The `From` display name                                              |
-| `is_active`      | INTEGER (bool)  | Whether this subscription is currently active                        |
-| `auto_tag_rules` | TEXT (JSON)     | Optional rules for auto-tagging incoming issues                      |
-| `created_at`     | TEXT (ISO 8601) | When the subscription was first seen                                 |
-| `updated_at`     | TEXT (ISO 8601) | Last update time                                                     |
+| Field            | Type            | Description                                                                                      |
+|------------------|-----------------|--------------------------------------------------------------------------------------------------|
+| `id`             | TEXT (UUID)     | Primary key, generated via `crypto.randomUUID()`                                                 |
+| `pseudo_email`   | TEXT (unique)   | The generated email address (e.g., `techweekly@read.yourdomain.com`)                             |
+| `display_name`   | TEXT            | Human-readable name for the subscription                                                         |
+| `sender_address` | TEXT            | The `From` address of the newsletter                                                             |
+| `sender_name`    | TEXT            | The `From` display name                                                                          |
+| `is_active`      | INTEGER (bool)  | Whether this subscription is currently active                                                    |
+| `auto_tag_rules` | TEXT (JSON)     | Optional rules for auto-tagging incoming issues                                                  |
+| `created_at`     | TEXT (ISO 8601) | When the subscription was first seen                                                             |
+| `updated_at`     | TEXT (ISO 8601) | Last update time                                                                                 |
+| `deleted_at`     | TEXT (ISO 8601) | Soft-delete timestamp. Null when active. Soft-deleted subscriptions can be manually hard-deleted |
 
 #### Issue (Individual Newsletter)
 
-| Field                | Type            | Description                                                       |
-|----------------------|-----------------|-------------------------------------------------------------------|
-| `id`                 | TEXT (UUID)     | Primary key, generated via `crypto.randomUUID()`                  |
-| `subscription_id`    | TEXT (FK)       | Link to parent subscription                                       |
-| `message_id`         | TEXT (unique)   | Email `Message-ID` header, used for deduplication                 |
-| `subject`            | TEXT            | Email subject line                                                |
-| `from_address`       | TEXT            | Sender email                                                      |
-| `from_name`          | TEXT            | Sender display name                                               |
-| `received_at`        | TEXT (ISO 8601) | When the email was received                                       |
-| `html_content`       | TEXT            | Sanitized HTML body                                               |
-| `markdown_content`   | TEXT            | Converted Markdown body                                           |
-| `plain_text_content` | TEXT            | Plain text fallback                                               |
-| `raw_headers`        | TEXT (JSON)     | Original email headers (for debugging)                            |
-| `is_read`            | INTEGER (bool)  | Read status                                                       |
-| `is_starred`         | INTEGER (bool)  | Starred/bookmarked status                                         |
-| `is_rejected`        | INTEGER (bool)  | Whether the email failed validation (empty body, spam). Default 0 |
-| `rejection_reason`   | TEXT            | Why the email was flagged (null if not rejected)                  |
-| `summary`            | TEXT            | Optional LLM-generated summary                                    |
+| Field                | Type            | Description                                                                                                                 |
+|----------------------|-----------------|-----------------------------------------------------------------------------------------------------------------------------|
+| `id`                 | TEXT (UUID)     | Primary key, generated via `crypto.randomUUID()`                                                                            |
+| `subscription_id`    | TEXT (FK)       | Link to parent subscription                                                                                                 |
+| `message_id`         | TEXT (unique)   | Email `Message-ID` header, used for deduplication                                                                           |
+| `fingerprint`        | TEXT (unique)   | Fallback dedup key: hash of `recipient + from_address + subject + date_bucket + body_hash`. Null if `message_id` is present |
+| `subject`            | TEXT            | Email subject line                                                                                                          |
+| `from_address`       | TEXT            | Sender email                                                                                                                |
+| `from_name`          | TEXT            | Sender display name                                                                                                         |
+| `received_at`        | TEXT (ISO 8601) | When the email was received                                                                                                 |
+| `html_content`       | TEXT            | Sanitized HTML body                                                                                                         |
+| `markdown_content`   | TEXT            | Converted Markdown body                                                                                                     |
+| `plain_text_content` | TEXT            | Plain text fallback                                                                                                         |
+| `raw_headers`        | TEXT (JSON)     | Original email headers (for debugging)                                                                                      |
+| `is_read`            | INTEGER (bool)  | Read status                                                                                                                 |
+| `is_starred`         | INTEGER (bool)  | Starred/bookmarked status                                                                                                   |
+| `is_rejected`        | INTEGER (bool)  | Whether the email failed validation (empty body, spam). Default 0                                                           |
+| `rejection_reason`   | TEXT            | Why the email was flagged (null if not rejected)                                                                            |
+| `needs_confirmation` | INTEGER (bool)  | Whether this is a confirmation/verification email requiring manual action. Default 0                                        |
+| `delivery_attempts`  | INTEGER         | Internal-only counter of duplicate delivery attempts. Default 1. Not exposed in API/UI                                      |
+| `summary`            | TEXT            | Optional LLM-generated summary                                                                                              |
 
 #### Tag
 
@@ -139,6 +150,51 @@ Use a **catch-all configuration on a dedicated subdomain** (e.g., `*@read.yourdo
 | `color`       | TEXT            | Display color (hex)  |
 | `description` | TEXT            | Optional description |
 | `created_at`  | TEXT (ISO 8601) | Creation time        |
+
+#### Attachment
+
+| Field          | Type            | Description                                                                   |
+|----------------|-----------------|-------------------------------------------------------------------------------|
+| `id`           | TEXT (UUID)     | Primary key                                                                   |
+| `issue_id`     | TEXT (FK)       | References `issue`                                                            |
+| `filename`     | TEXT            | Original filename from MIME part                                              |
+| `content_type` | TEXT            | MIME content type (e.g., `application/pdf`)                                   |
+| `size_bytes`   | INTEGER         | Size of the attachment in bytes                                               |
+| `content_id`   | TEXT            | MIME Content-ID for inline images (nullable; null for non-inline attachments) |
+| `storage_key`  | TEXT            | R2 object key (nullable; null in v1 metadata-only mode)                       |
+| `created_at`   | TEXT (ISO 8601) | Creation time                                                                 |
+
+#### Denylist
+
+| Field        | Type            | Description                                        |
+|--------------|-----------------|----------------------------------------------------|
+| `id`         | TEXT (UUID)     | Primary key                                        |
+| `domain`     | TEXT (unique)   | Sender domain to reject (e.g., `spam.example.com`) |
+| `reason`     | TEXT            | Why this domain is denied                          |
+| `created_at` | TEXT (ISO 8601) | When the entry was added                           |
+
+#### Feed_Token
+
+| Field         | Type            | Description                                                  |
+|---------------|-----------------|--------------------------------------------------------------|
+| `id`          | TEXT (UUID)     | Primary key                                                  |
+| `token_hash`  | TEXT (unique)   | SHA-256 hash of the opaque token. Plaintext is never stored  |
+| `label`       | TEXT            | User-assigned label for this token                           |
+| `created_at`  | TEXT (ISO 8601) | Creation time                                                |
+| `revoked_at`  | TEXT (ISO 8601) | Revocation timestamp (null if active)                        |
+
+#### Ingestion_Log
+
+| Field          | Type            | Description                                                     |
+|----------------|-----------------|-----------------------------------------------------------------|
+| `id`           | TEXT (UUID)     | Primary key                                                     |
+| `event_id`     | TEXT            | Unique identifier for the inbound email event                   |
+| `issue_id`     | TEXT (FK)       | References `issue` (nullable if ingestion failed before insert) |
+| `received_at`  | TEXT (ISO 8601) | When the email was received                                     |
+| `status`       | TEXT            | `success` or `failure`                                          |
+| `error_code`   | TEXT            | Error classification (nullable on success)                      |
+| `error_detail` | TEXT            | Detailed error message (nullable on success)                    |
+| `attempts`     | INTEGER         | Number of inline retry attempts made                            |
 
 #### Subscription_Tags (Join Table)
 
@@ -176,14 +232,39 @@ Primary key: (`issue_id`, `tag_id`)
 - Convert sanitized HTML to Markdown.
 - If no matching subscription exists for the recipient address, auto-create one using the local part as the display name and the sender info from the email.
 - Store the parsed issue in the database linked to the subscription.
-- Store emails that fail basic validation (empty body, known spam patterns) with `is_rejected = true` and a `rejection_reason`. These are hidden from the default feed view but can be inspected by the user to catch false positives.
+- Extract attachment metadata from MIME parts and store in the `Attachment` table. v1 stores metadata only (no binary persistence; `storage_key` is null). Binary storage via R2 is a Phase 2 enhancement.
+- Log every ingestion attempt in the `Ingestion_Log` table with `event_id`, `received_at`, `status`, `error_code`, `error_detail`, and `attempts`.
+
+**Deduplication:**
+
+- Primary deduplication key is the normalized `Message-ID` header.
+- If `Message-ID` is missing, compute a fallback `fingerprint`: hash of `recipient + from_address + subject + date_bucket + body_hash`, where `date_bucket` is hour-level UTC.
+- Duplicate arrivals do not create a new issue; they update `updated_at` on the existing issue and increment the internal `delivery_attempts` counter.
+
+**Validation and Rejection:**
+
+- `is_rejected` is set only when at least one explicit rule matches. v1 rejection rules:
+  - Empty body (no HTML, no plain text after trimming).
+  - Sender domain matches an entry in the `Denylist` table (managed via a settings page in the UI).
+  - Known spam template match with confidence ≥ configured threshold.
+- Rejected issues are hidden from the default feed view but accessible via a dedicated "Rejected" view. The user can restore a rejected issue to the normal feed.
+
+**Confirmation Email Detection:**
+
+- Confirmation/verification emails are **not** rejected. They are stored with `needs_confirmation = 1`.
+- Detection signals: subject keywords (`confirm`, `verify`, `activate`), known sender patterns, and presence of high-confidence confirmation CTA links.
+- The UI exposes a "Needs Confirmation" filter and renders confirmation links with a safe target preview before opening.
+
+**Retry Policy:**
+
+- Up to 3 inline retry attempts with exponential backoff within the same Worker invocation for transient failures (e.g., D1 write errors). No external queue or Cron-based retry.
+- `ingestion_success`: parsed, sanitized, stored, and FTS-indexed without error.
+- `ingestion_failure`: any step fails after retries are exhausted. Logged with error details.
 
 **Edge Cases:**
 
-- Confirmation emails from newsletter platforms that require a click-to-verify: detect these and surface them in the UI for manual action.
 - Multipart emails with both HTML and plain text: prefer HTML, store both.
-- Emails with attachments: store attachment metadata, optionally store attachments in object storage.
-- Duplicate emails (retries from sender): deduplicate by `Message-ID` header.
+- Emails with attachments: store attachment metadata in the `Attachment` table. Inline images populate `content_id`; regular attachments have `content_id = null`.
 
 ### 5.2 Subscription Management
 
@@ -196,9 +277,14 @@ Primary key: (`issue_id`, `tag_id`)
 - List all subscriptions with: display name, pseudo email, sender, tag(s), last received date, unread count.
 - Create a new subscription manually (generate a pseudo email address).
 - Edit subscription: rename, assign/remove tags, toggle active/inactive.
-- Delete a subscription and optionally all associated issues.
 - Copy pseudo email address to clipboard (for pasting into newsletter signup forms).
 - Show subscription stats: total issues received, frequency, last received.
+
+**Deletion semantics:**
+
+- Deleting a subscription is a soft delete by default (`deleted_at` timestamp set, hidden from UI).
+- Soft-deleted subscriptions can be restored manually at any time (no expiry). There is no automated cleanup job.
+- An explicit hard-delete action permanently removes the subscription, its issues, tag links, and attachment metadata.
 
 ### 5.3 Reader Interface
 
@@ -208,14 +294,13 @@ Primary key: (`issue_id`, `tag_id`)
 
 **Functional Requirements:**
 
-- **Left sidebar:** List of subscriptions, grouped by tags/folders. Show unread counts. Include an "All" view and a "Starred" view.
-- **Feed view (center pane):** Chronological list of issues for the selected subscription, tag, or "All". Show subject, sender, date, preview snippet, read/unread status.
+- **Left sidebar:** List of subscriptions, grouped by tags/folders. Show unread counts. Include an "All" view, a "Starred" view, a "Needs Confirmation" filter, and a "Rejected" view.
+- **Feed view (center pane):** Chronological list of issues for the selected subscription, tag, or "All". Show subject, sender, date, preview snippet, read/unread status. Pagination: 50 issues per page with "Load more".
 - **Reading pane (right or expanded):** Render the sanitized HTML content of the selected issue. Toggle between HTML and Markdown views.
-- Mark issues as read/unread.
+- Mark issues as read/unread. Opening an issue auto-marks it as read after 1.5 seconds of focused visibility (in both three-pane and Focus Mode layouts); manual toggle remains available.
 - Star/bookmark issues.
-- Keyboard navigation: `j`/`k` for next/previous issue, `s` to star, `m` to toggle read.
-- Pagination or infinite scroll for the feed view.
-- Responsive design: usable on desktop and mobile.
+- Keyboard navigation: `j`/`k` for next/previous issue, `s` to star, `m` to toggle read. Keyboard shortcuts are disabled while focus is inside editable inputs.
+- Responsive design: desktop default is three-pane layout; mobile default is stacked navigation (list → feed → reader).
 - Focus mode: Reading view that makes the content from the reading pane full-width and hides distractions.
 
 ### 5.4 Tagging System
@@ -244,7 +329,12 @@ Primary key: (`issue_id`, `tag_id`)
 - Search by: subject, sender, body content, tags.
 - Filter results by: subscription, tag, date range, read/unread status.
 - Return results ranked by relevance with highlighted snippets.
-- Implementation: SQLite FTS5 (if using D1/SQLite) or Postgres full-text search.
+
+**Implementation:**
+
+- v1 search backend is D1/SQLite FTS5 (Postgres option removed from v1 scope).
+- FTS5 indexed fields: `subject`, `from_name`, `from_address`, `plain_text_content`, `markdown_content`, and tag names.
+- FTS index updates are part of the ingestion transaction; failures must roll back the issue insert to maintain index consistency.
 
 ### 5.6 Summarization (Optional / Future)
 
@@ -269,7 +359,8 @@ Primary key: (`issue_id`, `tag_id`)
 - Generate an Atom feed per subscription (`/feeds/{subscription-id}/atom.xml`).
 - Generate an Atom feed per tag (`/feeds/tags/{tag-name}/atom.xml`).
 - Generate a combined "all" feed (`/feeds/all/atom.xml`).
-- Feeds are protected by a per-user secret token in the URL.
+- Feeds are authenticated by a per-user opaque token in the URL. Tokens are stored hashed (SHA-256) in the `Feed_Token` table; plaintext is never persisted.
+- Token lifecycle: the UI supports creating, rotating, and revoking feed tokens.
 - Feed items include: title (subject), content (sanitized HTML), author (sender), published date.
 
 ---
@@ -335,9 +426,14 @@ Primary key: (`issue_id`, `tag_id`)
 
 ### 7.1 Deliverability & Reliability
 
-- Some newsletter platforms verify recipient addresses by sending a confirmation email with a click-to-verify link. The system must surface these in the UI so the user can open and confirm manually.
+- Some newsletter platforms verify recipient addresses by sending a confirmation email with a click-to-verify link. The system detects these (see Section 5.1, Confirmation Email Detection) and surfaces them in the UI for manual action.
 - Some senders check MX records and may reject delivery to custom domains without proper DNS configuration. Ensure MX, SPF, DKIM, and DMARC records are correctly set.
-- Implement idempotent processing: deduplicate by `Message-ID` header to handle sender retries.
+- Implement idempotent processing: deduplicate by `Message-ID` header (with fallback fingerprint) to handle sender retries. See Section 5.1, Deduplication.
+
+**Observability:**
+
+- Every ingestion attempt is logged in the `Ingestion_Log` table (see Section 4).
+- A Cron Trigger Worker computes a daily reliability report (success/failure rate over the prior 30 days) and writes results to a reports table. The UI renders these reports on an admin dashboard page.
 
 ### 7.2 Email HTML Challenges
 
@@ -354,9 +450,9 @@ Primary key: (`issue_id`, `tag_id`)
 
 ### 7.4 Security
 
-- The reader UI is protected by **Cloudflare Access** (zero-trust). No application-level auth code is required. The operator configures an Access policy for the Pages domain.
-- RSS feed URLs must include an unguessable token to prevent unauthorized access.
-- Email ingestion should rate-limit and validate inbound messages to prevent abuse of the catch-all address.
+- **UI and API routes:** Protected by **Cloudflare Access** (zero-trust). No application-level auth code is required. The operator configures an Access policy for the Pages domain.
+- **Ingestion endpoints:** Email Worker event handlers are not public HTTP routes; they are triggered by Cloudflare's email routing infrastructure. Rate-limit and validate inbound messages to prevent abuse of the catch-all address.
+- **Feed endpoints:** Authenticated by a per-user opaque token in the URL. Tokens are stored hashed (SHA-256) in D1 via the `Feed_Token` table. The UI supports token creation, rotation, and revocation.
 
 ---
 
