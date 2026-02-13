@@ -139,6 +139,7 @@ Use a **catch-all configuration on a dedicated subdomain** (e.g., `*@read.yourdo
 | `rejection_reason`   | TEXT            | Why the email was flagged (null if not rejected)                                                                            |
 | `needs_confirmation` | INTEGER (bool)  | Whether this is a confirmation/verification email requiring manual action. Default 0                                        |
 | `delivery_attempts`  | INTEGER         | Internal-only counter of duplicate delivery attempts. Default 1. Not exposed in API/UI                                      |
+| `updated_at`         | TEXT (ISO 8601) | Last update time (used for deduplication updates and issue state changes)                                                   |
 | `summary`            | TEXT            | Optional LLM-generated summary                                                                                              |
 
 #### Tag
@@ -233,6 +234,7 @@ Primary key: (`issue_id`, `tag_id`)
 - If no matching subscription exists for the recipient address, auto-create one using the local part as the display name and the sender info from the email.
 - Store the parsed issue in the database linked to the subscription.
 - Extract attachment metadata from MIME parts and store in the `Attachment` table. v1 stores metadata only (no binary persistence; `storage_key` is null). Binary storage via R2 is a Phase 2 enhancement.
+- v1 does not resolve/render `cid:` inline images in the reader; such images may appear missing until binary storage or proxy support is added in a later phase.
 - Log every ingestion attempt in the `Ingestion_Log` table with `event_id`, `received_at`, `status`, `error_code`, `error_detail`, and `attempts`.
 
 **Deduplication:**
@@ -258,13 +260,13 @@ Primary key: (`issue_id`, `tag_id`)
 **Retry Policy:**
 
 - Up to 3 inline retry attempts with exponential backoff within the same Worker invocation for transient failures (e.g., D1 write errors). No external queue or Cron-based retry.
-- `ingestion_success`: parsed, sanitized, stored, and FTS-indexed without error.
-- `ingestion_failure`: any step fails after retries are exhausted. Logged with error details.
+- `success`: parsed, sanitized, and stored without error.
+- `failure`: any step fails after retries are exhausted. Logged with `status = failure` plus `error_code` and `error_detail`.
 
 **Edge Cases:**
 
 - Multipart emails with both HTML and plain text: prefer HTML, store both.
-- Emails with attachments: store attachment metadata in the `Attachment` table. Inline images populate `content_id`; regular attachments have `content_id = null`.
+- Emails with attachments: store attachment metadata in the `Attachment` table. Inline images populate `content_id`; regular attachments have `content_id = null`. Rendering `cid:` inline images is out of scope for Phase 1.
 
 ### 5.2 Subscription Management
 
@@ -332,7 +334,7 @@ Primary key: (`issue_id`, `tag_id`)
 
 **Implementation:**
 
-- v1 search backend is D1/SQLite FTS5 (Postgres option removed from v1 scope).
+- Search (including D1/SQLite FTS5 indexing) is introduced in Phase 2.
 - FTS5 indexed fields: `subject`, `from_name`, `from_address`, `plain_text_content`, `markdown_content`, and tag names.
 - FTS index updates are part of the ingestion transaction; failures must roll back the issue insert to maintain index consistency.
 
@@ -359,6 +361,7 @@ Primary key: (`issue_id`, `tag_id`)
 - Generate an Atom feed per subscription (`/feeds/{subscription-id}/atom.xml`).
 - Generate an Atom feed per tag (`/feeds/tags/{tag-name}/atom.xml`).
 - Generate a combined "all" feed (`/feeds/all/atom.xml`).
+- Feed endpoints are served on a separate route/hostname (for example, `feeds.read.yourdomain.com`) that is not protected by Cloudflare Access, so external RSS clients can fetch feeds.
 - Feeds are authenticated by a per-user opaque token in the URL. Tokens are stored hashed (SHA-256) in the `Feed_Token` table; plaintext is never persisted.
 - Token lifecycle: the UI supports creating, rotating, and revoking feed tokens.
 - Feed items include: title (subject), content (sanitized HTML), author (sender), published date.
@@ -452,7 +455,7 @@ Primary key: (`issue_id`, `tag_id`)
 
 - **UI and API routes:** Protected by **Cloudflare Access** (zero-trust). No application-level auth code is required. The operator configures an Access policy for the Pages domain.
 - **Ingestion endpoints:** Email Worker event handlers are not public HTTP routes; they are triggered by Cloudflare's email routing infrastructure. Rate-limit and validate inbound messages to prevent abuse of the catch-all address.
-- **Feed endpoints:** Authenticated by a per-user opaque token in the URL. Tokens are stored hashed (SHA-256) in D1 via the `Feed_Token` table. The UI supports token creation, rotation, and revocation.
+- **Feed endpoints:** Exposed on a separate route/hostname from the Access-protected app and authenticated by a per-user opaque token in the URL. Tokens are stored hashed (SHA-256) in D1 via the `Feed_Token` table. The UI supports token creation, rotation, and revocation.
 
 ---
 
