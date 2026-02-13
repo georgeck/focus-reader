@@ -98,130 +98,68 @@ Use a **catch-all configuration on a dedicated subdomain** (e.g., `*@read.yourdo
 
 ## 4. Data Model
 
+> **Canonical schema:** The authoritative database schema for Focus Reader is defined in the [Focus Reader PRD](./focus-reader-prd.md), Section 5. Email newsletter items are stored using the unified `Document` + `Document_Email_Meta` tables defined there. This section describes how email-specific concepts map to that unified model and documents the email-specific behavioral details that the main PRD references.
+
 ### 4.0 Terminology Glossary
 
-- **Subscription:** A newsletter source mapped to one pseudo email address (e.g., `techweekly@read.yourdomain.com`).
-- **Newsletter item:** A single ingested newsletter email belonging to a subscription.
-- **Tag:** A user-defined label used to organize subscriptions and newsletter items.
-- **Attachment:** Metadata for a file or inline MIME part associated with a newsletter item.
+- **Document:** The universal content entity in Focus Reader. Each ingested newsletter email is stored as a `Document` row with `type = 'email'` and `source_type = 'subscription'`. See [Focus Reader PRD](./focus-reader-prd.md), Section 5.1.
+- **Document_Email_Meta:** A companion table storing email-specific metadata (deduplication keys, sender details, rejection/confirmation flags) for documents with `type = 'email'`. One-to-one with `Document`.
+- **Subscription:** A newsletter source mapped to one pseudo email address (e.g., `techweekly@read.yourdomain.com`). Documents reference their subscription via `Document.source_id`.
+- **Tag:** A user-defined label used to organize subscriptions and documents.
+- **Attachment:** Metadata for a file or inline MIME part associated with a document.
 - **Ingestion event:** One processing attempt for an inbound email, recorded in `Ingestion_Log`.
 
-### 4.1 Core Entities
+### 4.1 Schema Mapping
 
-> **Implementation notes:** All UUIDs are stored as `TEXT` columns using `crypto.randomUUID()`. Tags use normalized join tables (`subscription_tags`, `newsletter_item_tags`) rather than array columns, since D1/SQLite does not support array types.
+> **Note:** The full table definitions for all entities below live in the [Focus Reader PRD](./focus-reader-prd.md), Section 5. This section explains how email-specific concepts from this spec map to that unified schema.
 
-#### Subscription
+#### How Newsletter Items Map to the Unified Model
 
-| Field            | Type            | Description                                                                                      |
-|------------------|-----------------|--------------------------------------------------------------------------------------------------|
-| `id`             | TEXT (UUID)     | Primary key, generated via `crypto.randomUUID()`                                                 |
-| `pseudo_email`   | TEXT (unique)   | The generated email address (e.g., `techweekly@read.yourdomain.com`)                             |
-| `display_name`   | TEXT            | Human-readable name for the subscription                                                         |
-| `sender_address` | TEXT            | The `From` address of the newsletter                                                             |
-| `sender_name`    | TEXT            | The `From` display name                                                                          |
-| `is_active`      | INTEGER (bool)  | Whether this subscription is currently active                                                    |
-| `auto_tag_rules` | TEXT (JSON)     | Optional rules for auto-tagging incoming newsletter items                                        |
-| `created_at`     | TEXT (ISO 8601) | When the subscription was first seen                                                             |
-| `updated_at`     | TEXT (ISO 8601) | Last update time                                                                                 |
-| `deleted_at`     | TEXT (ISO 8601) | Soft-delete timestamp. Null when active. Soft-deleted subscriptions can be manually hard-deleted |
+The original `Newsletter_Item` entity from this spec has been replaced by two tables in the unified model:
 
-#### Newsletter_Item (Individual Newsletter Email)
+1. **`Document`** — stores the universal fields (content, metadata, reading state).
+2. **`Document_Email_Meta`** — stores email-specific fields (deduplication keys, sender details, rejection/confirmation flags).
 
-| Field                | Type            | Description                                                                                                                 |
-|----------------------|-----------------|-----------------------------------------------------------------------------------------------------------------------------|
-| `id`                 | TEXT (UUID)     | Primary key, generated via `crypto.randomUUID()`                                                                            |
-| `subscription_id`    | TEXT (FK)       | Link to parent subscription                                                                                                 |
-| `message_id`         | TEXT (unique)   | Email `Message-ID` header, used for deduplication                                                                           |
-| `fingerprint`        | TEXT (unique)   | Fallback dedup key: hash of `recipient + from_address + subject + date_bucket + body_hash`. Null if `message_id` is present |
-| `subject`            | TEXT            | Email subject line                                                                                                          |
-| `from_address`       | TEXT            | Sender email                                                                                                                |
-| `from_name`          | TEXT            | Sender display name                                                                                                         |
-| `received_at`        | TEXT (ISO 8601) | When the email was received                                                                                                 |
-| `html_content`       | TEXT            | Sanitized HTML body                                                                                                         |
-| `markdown_content`   | TEXT            | Converted Markdown body                                                                                                     |
-| `plain_text_content` | TEXT            | Plain text fallback                                                                                                         |
-| `raw_headers`        | TEXT (JSON)     | Original email headers (for debugging)                                                                                      |
-| `is_read`            | INTEGER (bool)  | Read status                                                                                                                 |
-| `is_starred`         | INTEGER (bool)  | Starred/bookmarked status                                                                                                   |
-| `is_rejected`        | INTEGER (bool)  | Whether the email failed validation (empty body, spam). Default 0                                                           |
-| `rejection_reason`   | TEXT            | Why the email was flagged (null if not rejected)                                                                            |
-| `needs_confirmation` | INTEGER (bool)  | Whether this is a confirmation/verification email requiring manual action. Default 0                                        |
-| `delivery_attempts`  | INTEGER         | Internal-only counter of duplicate delivery attempts. Default 1. Not exposed in API/UI                                      |
-| `updated_at`         | TEXT (ISO 8601) | Last update time (used for deduplication updates and newsletter item state changes)                                         |
-| `summary`            | TEXT            | Optional LLM-generated summary                                                                                              |
+Each ingested newsletter email creates one `Document` row (with `type = 'email'`, `source_type = 'subscription'`) and one `Document_Email_Meta` row linked by `document_id`.
 
-#### Tag
+**Field mapping from the original `Newsletter_Item` to the unified model:**
 
-| Field         | Type            | Description          |
-|---------------|-----------------|----------------------|
-| `id`          | TEXT (UUID)     | Primary key          |
-| `name`        | TEXT (unique)   | Tag name             |
-| `color`       | TEXT            | Display color (hex)  |
-| `description` | TEXT            | Optional description |
-| `created_at`  | TEXT (ISO 8601) | Creation time        |
+| Original `Newsletter_Item` field | Unified table            | Unified field         | Notes                                          |
+|----------------------------------|--------------------------|-----------------------|------------------------------------------------|
+| `id`                             | `Document`               | `id`                  |                                                |
+| `subscription_id`                | `Document`               | `source_id`           | With `source_type = 'subscription'`            |
+| `message_id`                     | `Document_Email_Meta`    | `message_id`          |                                                |
+| `fingerprint`                    | `Document_Email_Meta`    | `fingerprint`         |                                                |
+| `subject`                        | `Document`               | `title`               |                                                |
+| `from_address`                   | `Document_Email_Meta`    | `from_address`        |                                                |
+| `from_name`                      | `Document_Email_Meta`    | `from_name`           | Also stored as `Document.author`               |
+| `received_at`                    | `Document`               | `saved_at`            |                                                |
+| `html_content`                   | `Document`               | `html_content`        |                                                |
+| `markdown_content`               | `Document`               | `markdown_content`    |                                                |
+| `plain_text_content`             | `Document`               | `plain_text_content`  |                                                |
+| `raw_headers`                    | `Document_Email_Meta`    | `raw_headers`         |                                                |
+| `is_read`                        | `Document`               | `is_read`             |                                                |
+| `is_starred`                     | `Document`               | `is_starred`          |                                                |
+| `is_rejected`                    | `Document_Email_Meta`    | `is_rejected`         |                                                |
+| `rejection_reason`               | `Document_Email_Meta`    | `rejection_reason`    |                                                |
+| `needs_confirmation`             | `Document_Email_Meta`    | `needs_confirmation`  |                                                |
+| `delivery_attempts`              | `Document_Email_Meta`    | `delivery_attempts`   |                                                |
+| `updated_at`                     | `Document`               | `updated_at`          |                                                |
+| `summary`                        | *(not in unified model)* | —                     | Future: may be added to `Document` in Phase 4  |
 
-#### Attachment
+#### Other Entity Mappings
 
-| Field                | Type            | Description                                                                   |
-|----------------------|-----------------|-------------------------------------------------------------------------------|
-| `id`                 | TEXT (UUID)     | Primary key                                                                   |
-| `newsletter_item_id` | TEXT (FK)       | References `newsletter_item`                                                  |
-| `filename`           | TEXT            | Original filename from MIME part                                              |
-| `content_type`       | TEXT            | MIME content type (e.g., `application/pdf`)                                   |
-| `size_bytes`         | INTEGER         | Size of the attachment in bytes                                               |
-| `content_id`         | TEXT            | MIME Content-ID for inline images (nullable; null for non-inline attachments) |
-| `storage_key`        | TEXT            | R2 object key (nullable; null in v1 metadata-only mode)                       |
-| `created_at`         | TEXT (ISO 8601) | Creation time                                                                 |
+- **Subscription:** Defined in [Focus Reader PRD](./focus-reader-prd.md), Section 5.1. Schema is unchanged from this spec. Documents reference their subscription via `Document.source_id` (instead of the original `subscription_id` FK).
+- **Tag:** Defined in [Focus Reader PRD](./focus-reader-prd.md), Section 5.1. Schema is unchanged.
+- **Attachment:** Defined in [Focus Reader PRD](./focus-reader-prd.md), Section 5.1. The FK is now `document_id` (was `newsletter_item_id`).
+- **Denylist:** Defined in [Focus Reader PRD](./focus-reader-prd.md), Section 5.1. Schema is unchanged.
+- **Feed_Token:** Defined in [Focus Reader PRD](./focus-reader-prd.md), Section 5.1. Schema is unchanged.
+- **Ingestion_Log:** Defined in [Focus Reader PRD](./focus-reader-prd.md), Section 5.1. The FK is now `document_id` (was `newsletter_item_id`) and a `source_type` field has been added to distinguish email ingestion events from RSS, API, and extension events.
 
-#### Denylist
+#### Join Tables
 
-| Field        | Type            | Description                                        |
-|--------------|-----------------|----------------------------------------------------|
-| `id`         | TEXT (UUID)     | Primary key                                        |
-| `domain`     | TEXT (unique)   | Sender domain to reject (e.g., `spam.example.com`) |
-| `reason`     | TEXT            | Why this domain is denied                          |
-| `created_at` | TEXT (ISO 8601) | When the entry was added                           |
-
-#### Feed_Token
-
-| Field         | Type            | Description                                                  |
-|---------------|-----------------|--------------------------------------------------------------|
-| `id`          | TEXT (UUID)     | Primary key                                                  |
-| `token_hash`  | TEXT (unique)   | SHA-256 hash of the opaque token. Plaintext is never stored  |
-| `label`       | TEXT            | User-assigned label for this token                           |
-| `created_at`  | TEXT (ISO 8601) | Creation time                                                |
-| `revoked_at`  | TEXT (ISO 8601) | Revocation timestamp (null if active)                        |
-
-#### Ingestion_Log
-
-| Field                | Type            | Description                                                               |
-|----------------------|-----------------|---------------------------------------------------------------------------|
-| `id`                 | TEXT (UUID)     | Primary key                                                               |
-| `event_id`           | TEXT            | Unique identifier for the inbound email event                             |
-| `newsletter_item_id` | TEXT (FK)       | References `newsletter_item` (nullable if ingestion failed before insert) |
-| `received_at`        | TEXT (ISO 8601) | When the email was received                                               |
-| `status`             | TEXT            | `success` or `failure`                                                    |
-| `error_code`         | TEXT            | Error classification (nullable on success)                                |
-| `error_detail`       | TEXT            | Detailed error message (nullable on success)                              |
-| `attempts`           | INTEGER         | Number of inline retry attempts made                                      |
-
-#### Subscription_Tags (Join Table)
-
-| Field             | Type      | Description                |
-|-------------------|-----------|----------------------------|
-| `subscription_id` | TEXT (FK) | References `subscription`  |
-| `tag_id`          | TEXT (FK) | References `tag`           |
-
-Primary key: (`subscription_id`, `tag_id`)
-
-#### Newsletter_Item_Tags (Join Table)
-
-| Field                | Type      | Description                  |
-|----------------------|-----------|------------------------------|
-| `newsletter_item_id` | TEXT (FK) | References `newsletter_item` |
-| `tag_id`             | TEXT (FK) | References `tag`             |
-
-Primary key: (`newsletter_item_id`, `tag_id`)
+- **Subscription_Tags:** Unchanged. Defined in [Focus Reader PRD](./focus-reader-prd.md), Section 5.2.
+- **Newsletter_Item_Tags → Document_Tags:** The original `Newsletter_Item_Tags` join table has been replaced by `Document_Tags` in the unified model, which associates tags with any document type. See [Focus Reader PRD](./focus-reader-prd.md), Section 5.2.
 
 ---
 
@@ -231,7 +169,7 @@ Primary key: (`newsletter_item_id`, `tag_id`)
 
 **Priority:** P0 (Critical)
 
-**Description:** Receive inbound emails at pseudo addresses, parse them, and store them as newsletter items.
+**Description:** Receive inbound emails at pseudo addresses, parse them, and store them as documents.
 
 **Functional Requirements:**
 
@@ -240,28 +178,28 @@ Primary key: (`newsletter_item_id`, `tag_id`)
 - Sanitize HTML body: remove tracking pixels, external scripts, and unsafe elements. Preserve layout and images.
 - Convert sanitized HTML to Markdown.
 - If no matching subscription exists for the recipient address, auto-create one using the local part as the display name and the sender info from the email.
-- Store the parsed newsletter item in the database linked to the subscription.
-- Extract attachment metadata from MIME parts and store in the `Attachment` table. v1 stores metadata only (no binary persistence; `storage_key` is null). Binary storage via R2 is a Phase 2 enhancement.
+- Create a `Document` record with `type = 'email'`, `source_type = 'subscription'`, and `location = 'inbox'`, linked to the subscription via `source_id`. Create a corresponding `Document_Email_Meta` record with email-specific fields (deduplication keys, sender details, headers).
+- Extract attachment metadata from MIME parts and store in the `Attachment` table (linked via `document_id`). v1 stores metadata only (no binary persistence; `storage_key` is null). Binary storage via R2 is a Phase 2 enhancement.
 - v1 does not resolve/render `cid:` inline images in the reader; such images may appear missing until binary storage or proxy support is added in a later phase.
-- Log every ingestion attempt in the `Ingestion_Log` table with `event_id`, `received_at`, `status`, `error_code`, `error_detail`, and `attempts`.
+- Log every ingestion attempt in the `Ingestion_Log` table with `event_id`, `document_id`, `source_type = 'email'`, `received_at`, `status`, `error_code`, `error_detail`, and `attempts`.
 
 **Deduplication:**
 
-- Primary deduplication key is the normalized `Message-ID` header.
-- If `Message-ID` is missing, compute a fallback `fingerprint`: hash of `recipient + from_address + subject + date_bucket + body_hash`, where `date_bucket` is hour-level UTC.
-- Duplicate arrivals do not create a new newsletter item; they update `updated_at` on the existing newsletter item and increment the internal `delivery_attempts` counter.
+- Primary deduplication key is the normalized `Message-ID` header (stored in `Document_Email_Meta.message_id`).
+- If `Message-ID` is missing, compute a fallback `fingerprint`: hash of `recipient + from_address + subject + date_bucket + body_hash`, where `date_bucket` is hour-level UTC (stored in `Document_Email_Meta.fingerprint`).
+- Duplicate arrivals do not create a new document; they update `Document.updated_at` on the existing document and increment `Document_Email_Meta.delivery_attempts`.
 
 **Validation and Rejection:**
 
-- `is_rejected` is set only when at least one explicit rule matches. v1 rejection rules:
+- `Document_Email_Meta.is_rejected` is set only when at least one explicit rule matches. v1 rejection rules:
   - Empty body (no HTML, no plain text after trimming).
   - Sender domain matches an entry in the `Denylist` table (managed via a settings page in the UI).
   - Known spam template match with confidence ≥ configured threshold.
-- Rejected newsletter items are hidden from the default feed view but accessible via a dedicated "Rejected" view. The user can restore a rejected newsletter item to the normal feed.
+- Rejected documents are hidden from the default feed view but accessible via a dedicated "Rejected" view. The user can restore a rejected document to the normal feed.
 
 **Confirmation Email Detection:**
 
-- Confirmation/verification emails are **not** rejected. They are stored with `needs_confirmation = 1`.
+- Confirmation/verification emails are **not** rejected. They are stored with `Document_Email_Meta.needs_confirmation = 1`.
 - Detection signals: subject keywords (`confirm`, `verify`, `activate`), known sender patterns, and presence of high-confidence confirmation CTA links.
 - The UI exposes a "Needs Confirmation" filter and renders confirmation links with a safe target preview before opening.
 
@@ -273,8 +211,8 @@ Primary key: (`newsletter_item_id`, `tag_id`)
 
 **Edge Cases:**
 
-- Multipart emails with both HTML and plain text: prefer HTML, store both.
-- Emails with attachments: store attachment metadata in the `Attachment` table. Inline images populate `content_id`; regular attachments have `content_id = null`. Rendering `cid:` inline images is out of scope for Phase 1.
+- Multipart emails with both HTML and plain text: prefer HTML, store both (in `Document.html_content` and `Document.plain_text_content`).
+- Emails with attachments: store attachment metadata in the `Attachment` table (linked via `document_id`). Inline images populate `content_id`; regular attachments have `content_id = null`. Rendering `cid:` inline images is out of scope for Phase 1.
 
 ### 5.2 Subscription Management
 
@@ -288,13 +226,13 @@ Primary key: (`newsletter_item_id`, `tag_id`)
 - Create a new subscription manually (generate a pseudo email address).
 - Edit subscription: rename, assign/remove tags, toggle active/inactive.
 - Copy pseudo email address to clipboard (for pasting into newsletter signup forms).
-- Show subscription stats: total newsletter items received, frequency, last received.
+- Show subscription stats: total documents received, frequency, last received.
 
 **Deletion semantics:**
 
 - Deleting a subscription is a soft delete by default (`deleted_at` timestamp set, hidden from UI).
 - Soft-deleted subscriptions can be restored manually at any time (no expiry). There is no automated cleanup job.
-- An explicit hard-delete action permanently removes the subscription, its newsletter items, tag links, and attachment metadata.
+- An explicit hard-delete action permanently removes the subscription, its associated documents (and their `Document_Email_Meta` records), tag links, and attachment metadata.
 
 ### 5.3 Reader Interface
 
@@ -305,11 +243,11 @@ Primary key: (`newsletter_item_id`, `tag_id`)
 **Functional Requirements:**
 
 - **Left sidebar:** List of subscriptions, grouped by tags/folders. Show unread counts. Include an "All" view, a "Starred" view, a "Needs Confirmation" filter, and a "Rejected" view.
-- **Feed view (center pane):** Chronological list of newsletter items for the selected subscription, tag, or "All". Show subject, sender, date, preview snippet, read/unread status. Pagination: 50 newsletter items per page with "Load more".
-- **Reading pane (right or expanded):** Render the sanitized HTML content of the selected newsletter item. Toggle between HTML and Markdown views.
-- Mark newsletter items as read/unread. Opening a newsletter item auto-marks it as read after 1.5 seconds of focused visibility (in both three-pane and Focus Mode layouts); manual toggle remains available.
-- Star/bookmark newsletter items.
-- Keyboard navigation: `j`/`k` for next/previous newsletter item, `s` to star, `m` to toggle read. Keyboard shortcuts are disabled while focus is inside editable inputs.
+- **Feed view (center pane):** Chronological list of documents for the selected subscription, tag, or "All". Show title, sender, date, preview snippet, read/unread status. Pagination: 50 documents per page with "Load more".
+- **Reading pane (right or expanded):** Render the sanitized HTML content of the selected document. Toggle between HTML and Markdown views.
+- Mark documents as read/unread. Opening a document auto-marks it as read after 1.5 seconds of focused visibility (in both three-pane and Focus Mode layouts); manual toggle remains available.
+- Star/bookmark documents.
+- Keyboard navigation: `j`/`k` for next/previous document, `s` to star, `m` to toggle read. Keyboard shortcuts are disabled while focus is inside editable inputs.
 - Responsive design: desktop default is three-pane layout; mobile default is stacked navigation (list → feed → reader).
 - Focus mode: Reading view that makes the content from the reading pane full-width and hides distractions.
 
@@ -317,16 +255,16 @@ Primary key: (`newsletter_item_id`, `tag_id`)
 
 **Priority:** P1 (High)
 
-**Description:** Flexible tagging for organizing subscriptions and individual newsletter items.
+**Description:** Flexible tagging for organizing subscriptions and individual documents.
 
 **Functional Requirements:**
 
 - Create, edit, delete tags with name and color.
-- Assign multiple tags to a subscription (all future newsletter items inherit these tags).
-- Assign additional tags to individual newsletter items.
+- Assign multiple tags to a subscription (all future documents from that subscription inherit these tags via `Subscription_Tags`).
+- Assign additional tags to individual documents (via `Document_Tags`).
 - Filter the feed view by one or more tags.
 - Auto-tagging rules: define rules per subscription or globally based on sender domain, subject keywords, or content keywords.
-- Optional: LLM-based auto-tagging — on ingestion, classify the newsletter item against the existing tag taxonomy and suggest/apply tags.
+- Optional: LLM-based auto-tagging — on ingestion, classify the document against the existing tag taxonomy and suggest/apply tags.
 
 ### 5.5 Search
 
@@ -336,25 +274,25 @@ Primary key: (`newsletter_item_id`, `tag_id`)
 
 **Functional Requirements:**
 
-- Search by: subject, sender, body content, tags.
+- Search by: title (subject), sender, body content, tags.
 - Filter results by: subscription, tag, date range, read/unread status.
 - Return results ranked by relevance with highlighted snippets.
 
 **Implementation:**
 
 - Search (including D1/SQLite FTS5 indexing) is introduced in Phase 2.
-- FTS5 indexed fields: `subject`, `from_name`, `from_address`, `plain_text_content`, `markdown_content`, and tag names.
-- FTS index updates are part of the ingestion transaction; failures must roll back the newsletter item insert to maintain index consistency.
+- FTS5 indexed fields: `Document.title`, `Document.author`, `Document_Email_Meta.from_address`, `Document.plain_text_content`, `Document.markdown_content`, and tag names.
+- FTS index updates are part of the ingestion transaction; failures must roll back the document insert to maintain index consistency.
 
 ### 5.6 Summarization (Optional / Future)
 
 **Priority:** P3 (Low)
 
-**Description:** LLM-generated summaries of newsletter items for quick scanning.
+**Description:** LLM-generated summaries of email documents for quick scanning.
 
 **Functional Requirements:**
 
-- On ingestion (or on demand), generate a 2–3 sentence summary of each newsletter item.
+- On ingestion (or on demand), generate a 2–3 sentence summary of each document.
 - Display summaries in the feed view as an alternative to content previews.
 - Generate daily/weekly digest summaries across all or tagged subscriptions.
 
@@ -372,7 +310,7 @@ Primary key: (`newsletter_item_id`, `tag_id`)
 - Feed endpoints are served on a separate route/hostname (for example, `feeds.read.yourdomain.com`) that is not protected by Cloudflare Access, so external RSS clients can fetch feeds.
 - Feeds are authenticated by a per-user opaque token in the URL. Tokens are stored hashed (SHA-256) in the `Feed_Token` table; plaintext is never persisted.
 - Token lifecycle: the UI supports creating, rotating, and revoking feed tokens.
-- Feed items include: title (subject), content (sanitized HTML), author (sender), published date.
+- Feed items include: title (`Document.title`), content (`Document.html_content`), author (`Document.author`), published date (`Document.saved_at`).
 
 ---
 
@@ -400,7 +338,7 @@ Primary key: (`newsletter_item_id`, `tag_id`)
 - Web UI with sidebar (subscriptions list), feed view, and reading pane.
 - Subscription management: view, rename, copy email address.
 - Basic tagging: create tags, assign to subscriptions.
-- Mark read/unread, star newsletter items.
+- Mark read/unread, star documents.
 - Mobile-responsive UI.
 
 **Success Criteria:** User can subscribe to newsletters using generated addresses and read them entirely through the Focus Reader UI, with no need to check email.
@@ -426,7 +364,7 @@ Primary key: (`newsletter_item_id`, `tag_id`)
 
 - RSS/Atom feed output.
 - LLM-based auto-tagging on ingestion.
-- Per-newsletter-item summaries.
+- Per-document summaries.
 - Daily/weekly digest generation.
 
 **Success Criteria:** User spends less time triaging and more time reading high-value content.
@@ -439,7 +377,7 @@ Primary key: (`newsletter_item_id`, `tag_id`)
 
 - Some newsletter platforms verify recipient addresses by sending a confirmation email with a click-to-verify link. The system detects these (see Section 5.1, Confirmation Email Detection) and surfaces them in the UI for manual action.
 - Some senders check MX records and may reject delivery to custom domains without proper DNS configuration. Ensure MX, SPF, DKIM, and DMARC records are correctly set.
-- Implement idempotent processing: deduplicate by `Message-ID` header (with fallback fingerprint) to handle sender retries. See Section 5.1, Deduplication.
+- Implement idempotent processing: deduplicate by `Message-ID` header in `Document_Email_Meta` (with fallback fingerprint) to handle sender retries. See Section 5.1, Deduplication.
 
 **Observability:**
 
@@ -454,8 +392,8 @@ Primary key: (`newsletter_item_id`, `tag_id`)
 
 ### 7.3 Storage & Costs
 
-- At personal scale (50 newsletters × 4 newsletter items/month = 200 newsletter items/month), storage is trivial.
-- Each newsletter item is roughly 50–200 KB of HTML. Annual storage: ~50 MB. Well within free tiers.
+- At personal scale (50 newsletters × 4 emails/month = 200 documents/month), storage is trivial.
+- Each email document is roughly 50–200 KB of HTML. Annual storage: ~50 MB. Well within free tiers.
 - Cloudflare D1 free tier: 5 GB. More than sufficient.
 - If storing images locally (rather than hotlinking), storage grows significantly — consider keeping external image references with a proxy/cache.
 
@@ -482,7 +420,7 @@ Primary key: (`newsletter_item_id`, `tag_id`)
 1. **Image handling:** Start with hotlinking from original sources for simplicity. A local proxy/cache layer will be considered in Phase 2 to address link rot and privacy concerns.
 2. **Multi-device sync:** Read/unread state is stored in the database and exposed via the UI, so it is inherently consistent across devices. No additional sync mechanism is needed.
 3. **Unsubscribe handling:** The system will parse `List-Unsubscribe` headers and provide a one-click unsubscribe action in the UI, planned for Phase 3.
-4. **Retention policy:** No automatic archival or deletion of old newsletter items. All content is retained indefinitely.
+4. **Retention policy:** No automatic archival or deletion of old documents. All content is retained indefinitely.
 5. **Import/export:** Not required for v1. Will be revisited when RSS subscription features are implemented.
 
 ---
