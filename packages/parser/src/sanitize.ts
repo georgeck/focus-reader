@@ -16,7 +16,7 @@ const ALLOWED_TAGS = new Set([
 
 const ALLOWED_ATTRS = new Set([
   "href", "src", "alt", "title", "width", "height",
-  "class", "id",
+  "class", "id", "style",
   "colspan", "rowspan",
   "target", "rel",
 ]);

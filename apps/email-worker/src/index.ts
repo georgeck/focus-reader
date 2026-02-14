@@ -8,6 +8,7 @@ import {
 } from "@focus-reader/shared";
 import {
   createDocument,
+  getDocument,
   createEmailMeta,
   getEmailMetaByMessageId,
   getEmailMetaByFingerprint,
@@ -96,8 +97,12 @@ export default {
       // Read raw stream once before retries (streams can only be consumed once)
       const rawBuffer = await streamToArrayBuffer(message.raw);
 
+      // Pre-generate document ID before retries so R2 uploads and DB writes
+      // use the same ID across attempts, preventing orphan objects and duplicates
+      const documentId = crypto.randomUUID();
+
       await withRetry(MAX_RETRY_ATTEMPTS, () =>
-        processEmail(rawBuffer, message.to, env, eventId, collapsePlus)
+        processEmail(rawBuffer, message.to, env, eventId, collapsePlus, documentId)
       );
     } catch (err) {
       // Final failure after all retries
@@ -122,7 +127,8 @@ async function processEmail(
   recipientAddress: string,
   env: Env,
   eventId: string,
-  collapsePlus: boolean
+  collapsePlus: boolean,
+  documentId: string
 ): Promise<void> {
   const db = env.FOCUS_DB;
 
@@ -153,12 +159,15 @@ async function processEmail(
   }
 
   const date = parsed.date ? new Date(parsed.date) : new Date();
+  // Use text/plain for fingerprint; fall back to HTML body to avoid
+  // false-collapsing distinct HTML-only emails into a single fingerprint
+  const fingerprintBody = parsed.text || parsed.html || "";
   const fingerprint = await computeFingerprint(
     recipientAddress,
     parsed.from.address,
     parsed.subject,
     date,
-    parsed.text || ""
+    fingerprintBody
   );
 
   const existingByFp = await getEmailMetaByFingerprint(db, fingerprint);
@@ -188,8 +197,21 @@ async function processEmail(
   // Step 5: Detect confirmation
   const isConfirmation = isConfirmationEmail(parsed);
 
-  // Step 6: Pre-generate document ID (needed for CID paths)
-  const documentId = crypto.randomUUID();
+  // Step 6: documentId is pre-generated before the retry loop (passed in)
+  // Check if a previous retry partially completed (document exists but email_meta doesn't)
+  const existingDoc = await getDocument(db, documentId);
+  if (existingDoc) {
+    // Document was created by a previous attempt — check if email_meta exists
+    const existingMeta = messageId
+      ? await getEmailMetaByMessageId(db, messageId)
+      : await getEmailMetaByFingerprint(db, fingerprint);
+    if (existingMeta) {
+      // Fully completed in a previous attempt, nothing to do
+      return;
+    }
+    // Document exists but email_meta doesn't — skip to email_meta creation below
+    // (handled by the INSERT OR IGNORE pattern on document creation)
+  }
 
   // Step 7: Sanitize HTML
   const sanitizedHtml = parsed.html ? sanitizeHtml(parsed.html) : null;
@@ -243,23 +265,25 @@ async function processEmail(
     });
   }
 
-  // Step 13: Create Document
-  await createDocument(db, {
-    id: documentId,
-    type: "email",
-    title: parsed.subject || "(No subject)",
-    author: parsed.from.name || parsed.from.address,
-    site_name: subscription.display_name,
-    html_content: finalHtml,
-    markdown_content: markdownContent,
-    plain_text_content: parsed.text || null,
-    word_count: wordCount,
-    reading_time_minutes: readingTime,
-    location: "inbox",
-    origin_type: "subscription",
-    source_id: subscription.id,
-    published_at: parsed.date || null,
-  });
+  // Step 13: Create Document (skip if already exists from a partial retry)
+  if (!existingDoc) {
+    await createDocument(db, {
+      id: documentId,
+      type: "email",
+      title: parsed.subject || "(No subject)",
+      author: parsed.from.name || parsed.from.address,
+      site_name: subscription.display_name,
+      html_content: finalHtml,
+      markdown_content: markdownContent,
+      plain_text_content: parsed.text || null,
+      word_count: wordCount,
+      reading_time_minutes: readingTime,
+      location: "inbox",
+      origin_type: "subscription",
+      source_id: subscription.id,
+      published_at: parsed.date || null,
+    });
+  }
 
   // Step 14: Create EmailMeta
   await createEmailMeta(db, {

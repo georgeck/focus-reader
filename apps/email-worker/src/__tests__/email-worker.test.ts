@@ -348,6 +348,64 @@ describe("email worker", () => {
     });
   });
 
+  describe("CID upload failure resilience", () => {
+    it("creates document even when R2 upload fails", async () => {
+      const testEnv = getEnv();
+
+      // Replace FOCUS_STORAGE with a failing R2 mock
+      const failingStorage = {
+        ...env.FOCUS_STORAGE,
+        put: () => {
+          throw new Error("R2 simulated failure");
+        },
+        get: env.FOCUS_STORAGE.get.bind(env.FOCUS_STORAGE),
+        delete: env.FOCUS_STORAGE.delete.bind(env.FOCUS_STORAGE),
+        list: env.FOCUS_STORAGE.list.bind(env.FOCUS_STORAGE),
+      } as unknown as R2Bucket;
+
+      const failEnv: Env = { ...testEnv, FOCUS_STORAGE: failingStorage };
+      const message = createMockMessage(CID_IMAGE_EML);
+
+      await worker.email(message, failEnv, fakeCtx);
+
+      // Document should still be created
+      const doc = await env.FOCUS_DB.prepare(
+        "SELECT * FROM document WHERE title = 'This Week in Design'"
+      ).first<Record<string, unknown>>();
+
+      expect(doc).not.toBeNull();
+      expect(doc!.html_content).toBeTruthy();
+
+      // HTML should still have the original cid: reference (not rewritten)
+      // since the upload failed and cidMap is empty
+      const htmlContent = doc!.html_content as string;
+      expect(htmlContent).toContain("cid:");
+
+      // R2 should be empty (upload failed)
+      const listed = await env.FOCUS_STORAGE.list();
+      expect(listed.objects).toHaveLength(0);
+
+      // Attachment record should exist but without storage_key
+      const att = await env.FOCUS_DB.prepare(
+        "SELECT * FROM attachment WHERE document_id = ?1 AND content_id = ?2"
+      )
+        .bind(doc!.id as string, "hero-image@designweekly")
+        .first<Record<string, unknown>>();
+
+      expect(att).not.toBeNull();
+      expect(att!.storage_key).toBeNull();
+
+      // Ingestion log should show success (document was still created)
+      const log = await env.FOCUS_DB.prepare(
+        "SELECT * FROM ingestion_log WHERE document_id = ?1"
+      )
+        .bind(doc!.id)
+        .first<Record<string, unknown>>();
+      expect(log).not.toBeNull();
+      expect(log!.status).toBe("success");
+    });
+  });
+
   describe("deduplication", () => {
     it("deduplicates by Message-ID", async () => {
       const testEnv = getEnv();
