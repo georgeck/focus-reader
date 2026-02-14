@@ -4,6 +4,19 @@ import type {
 } from "@focus-reader/shared";
 import { nowISO } from "@focus-reader/shared";
 
+export async function listIngestionLogs(
+  db: D1Database,
+  limit = 50
+): Promise<IngestionLog[]> {
+  const rows = await db
+    .prepare(
+      "SELECT * FROM ingestion_log ORDER BY received_at DESC LIMIT ?1"
+    )
+    .bind(limit)
+    .all<IngestionLog>();
+  return rows.results;
+}
+
 export async function logIngestionEvent(
   db: D1Database,
   input: CreateIngestionLogInput

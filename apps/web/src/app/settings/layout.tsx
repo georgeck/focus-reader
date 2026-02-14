@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ArrowLeft, Mail, Shield, Rss } from "lucide-react";
+import { ArrowLeft, Mail, Shield, Rss, ScrollText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
@@ -11,6 +11,7 @@ const SETTINGS_NAV = [
   { label: "Subscriptions", path: "/settings/subscriptions", icon: Rss },
   { label: "Denylist", path: "/settings/denylist", icon: Shield },
   { label: "Email", path: "/settings/email", icon: Mail },
+  { label: "Ingestion Log", path: "/settings/ingestion-log", icon: ScrollText },
 ] as const;
 
 export default function SettingsLayout({

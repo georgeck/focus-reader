@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
-import { patchSubscription, removeSubscription } from "@focus-reader/api";
+import { patchSubscription, removeSubscription, tagSubscription, untagSubscription } from "@focus-reader/api";
+import type { UpdateSubscriptionInput } from "@focus-reader/shared";
 import { getDb } from "@/lib/bindings";
 import { json, jsonError } from "@/lib/api-helpers";
 
@@ -11,7 +12,24 @@ export async function PATCH(
     const db = await getDb();
     const { id } = await params;
     const body = (await request.json()) as Record<string, unknown>;
-    await patchSubscription(db, id, body);
+
+    // Handle tag operations separately
+    if (typeof body.addTagId === "string") {
+      await tagSubscription(db, id, body.addTagId);
+      return json({ success: true });
+    }
+    if (typeof body.removeTagId === "string") {
+      await untagSubscription(db, id, body.removeTagId);
+      return json({ success: true });
+    }
+
+    // Only pass allowed fields to updateSubscription
+    const updates: UpdateSubscriptionInput = {};
+    if (body.display_name !== undefined) updates.display_name = body.display_name as string;
+    if (body.is_active !== undefined) updates.is_active = body.is_active as number;
+    if (body.auto_tag_rules !== undefined) updates.auto_tag_rules = body.auto_tag_rules as string | null;
+
+    await patchSubscription(db, id, updates);
     return json({ success: true });
   } catch {
     return jsonError("Failed to update subscription", "UPDATE_ERROR", 500);
@@ -19,13 +37,14 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const db = await getDb();
     const { id } = await params;
-    await removeSubscription(db, id);
+    const hard = request.nextUrl.searchParams.get("hard") === "true";
+    await removeSubscription(db, id, hard);
     return json({ success: true });
   } catch {
     return jsonError("Failed to delete subscription", "DELETE_ERROR", 500);

@@ -8,6 +8,7 @@
     "dev": "next dev",
     "start": "next start",
     "typecheck": "tsc --noEmit",
+    "test": "echo 'No tests yet — see agents/plans/phase-1-implementation-gaps.md §1.8'",
     "clean": "rm -rf .next dist"
   },
   "dependencies": {

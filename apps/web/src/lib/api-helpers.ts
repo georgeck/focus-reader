@@ -1,14 +1,16 @@
 import { NextResponse } from "next/server";
-import type { ApiError } from "@focus-reader/shared";
 
 export function jsonError(
   error: string,
   code: string,
   status: number
-): NextResponse<ApiError> {
-  return NextResponse.json({ error, code, status }, { status });
+): NextResponse {
+  return NextResponse.json(
+    { error: { code, message: error } },
+    { status }
+  );
 }
 
-export function json<T>(data: T, status = 200): NextResponse<T> {
+export function json<T>(data: T, status = 200): NextResponse {
   return NextResponse.json(data, { status });
 }

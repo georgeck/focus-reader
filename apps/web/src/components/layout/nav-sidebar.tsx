@@ -22,6 +22,7 @@ import { useSubscriptions } from "@/hooks/use-subscriptions";
 import { useTags } from "@/hooks/use-tags";
 import { useApp } from "@/contexts/app-context";
 import { Button } from "@/components/ui/button";
+import { AddBookmarkDialog } from "@/components/dialogs/add-bookmark-dialog";
 
 const NAV_ITEMS = [
   { label: "Inbox", icon: Inbox, path: "/inbox", badge: true },
@@ -38,6 +39,7 @@ export function NavSidebar() {
   const { tags } = useTags();
   const [subsOpen, setSubsOpen] = useState(true);
   const [tagsOpen, setTagsOpen] = useState(true);
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
 
   if (sidebarCollapsed) return null;
 
@@ -50,7 +52,7 @@ export function NavSidebar() {
           <Button variant="ghost" size="icon" className="size-7" onClick={toggleSidebar}>
             <PanelLeftClose className="size-4" />
           </Button>
-          <Button variant="ghost" size="icon" className="size-7">
+          <Button variant="ghost" size="icon" className="size-7" onClick={() => setAddDialogOpen(true)}>
             <Plus className="size-4" />
           </Button>
         </div>
@@ -175,6 +177,7 @@ export function NavSidebar() {
           <span>Settings</span>
         </Link>
       </div>
+      <AddBookmarkDialog open={addDialogOpen} onOpenChange={setAddDialogOpen} />
     </aside>
   );
 }

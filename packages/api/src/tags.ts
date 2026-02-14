@@ -11,6 +11,8 @@ import {
   deleteTag,
   addTagToDocument,
   removeTagFromDocument,
+  addTagToSubscription,
+  removeTagFromSubscription,
 } from "@focus-reader/db";
 
 export async function getTags(db: D1Database): Promise<TagWithCount[]> {
@@ -53,4 +55,20 @@ export async function untagDocument(
   tagId: string
 ): Promise<void> {
   await removeTagFromDocument(db, documentId, tagId);
+}
+
+export async function tagSubscription(
+  db: D1Database,
+  subscriptionId: string,
+  tagId: string
+): Promise<void> {
+  await addTagToSubscription(db, subscriptionId, tagId);
+}
+
+export async function untagSubscription(
+  db: D1Database,
+  subscriptionId: string,
+  tagId: string
+): Promise<void> {
+  await removeTagFromSubscription(db, subscriptionId, tagId);
 }
