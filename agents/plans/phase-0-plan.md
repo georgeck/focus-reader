@@ -59,17 +59,21 @@ The plan is organized into 5 sequential steps. Each step builds on the previous 
    - `tsconfig.base.json` — shared compiler options (ES2022, ESNext modules, bundler resolution, strict, no DOM)
    - `.gitignore` — `node_modules/`, `dist/`, `.next/`, `.wrangler/`, `.dev.vars`, `*.local`
 
-2. **Package workspaces (empty shells with `package.json`, `tsconfig.json`, `src/index.ts`):**
+2. **Root scripts:**
+   - `scripts/sync-secrets.sh` — Propagates shared configuration variables (`EMAIL_DOMAIN`, `COLLAPSE_PLUS_ALIAS`, etc.) across the multiple `.dev.vars` files in each app workspace, ensuring consistency for local development. Referenced in [Repo Structure Spec](../spec/repo-structure.md), Section 8.
+   - `scripts/ingest-local.ts` — Reads a `.eml` file from disk and replays it against the local email worker's `email()` handler. Accepts a file path argument and optionally a recipient address override. Used for iterative debugging of newsletter parsing/sanitization without requiring actual email delivery. Runs via `npx tsx scripts/ingest-local.ts ./fixtures/substack-example.eml`.
+
+3. **Package workspaces (empty shells with `package.json`, `tsconfig.json`, `src/index.ts`):**
    - `packages/shared` (`@focus-reader/shared`)
-   - `packages/db` (`@focus-reader/db`) — depends on `@focus-reader/shared`
+   - `packages/db` (`@focus-reader/db`) — depends on `@focus-reader/shared`. Includes a minimal `wrangler.toml` containing only the D1 `database_id` binding, making this package the authoritative location for running `wrangler d1 migrations apply`. No Worker logic — just the migration config.
    - `packages/parser` (`@focus-reader/parser`) — depends on `@focus-reader/shared`
    - `packages/api` (`@focus-reader/api`) — depends on `shared`, `db`, `parser` *(empty shell only — populated in Phase 1)*
 
-3. **App workspaces (empty shells):**
+4. **App workspaces (empty shells):**
    - `apps/web` — Next.js app with `@cloudflare/next-on-pages`, `wrangler.toml` with D1/R2 bindings *(empty shell only — populated in Phase 1)*
    - `apps/email-worker` — Cloudflare Worker with `wrangler.toml` with D1/R2 bindings and email routing config
 
-4. **Validation:**
+5. **Validation:**
    - `pnpm install` succeeds
    - `pnpm build` compiles all packages and apps
    - `pnpm typecheck` passes with zero errors
@@ -90,11 +94,14 @@ package.json
 turbo.json
 tsconfig.base.json
 .gitignore
+scripts/sync-secrets.sh
+scripts/ingest-local.ts
 packages/shared/package.json
 packages/shared/tsconfig.json
 packages/shared/src/index.ts
 packages/db/package.json
 packages/db/tsconfig.json
+packages/db/wrangler.toml
 packages/db/src/index.ts
 packages/parser/package.json
 packages/parser/tsconfig.json
@@ -138,6 +145,7 @@ apps/email-worker/src/index.ts
    - `DOCUMENT_TYPES`, `DOCUMENT_LOCATIONS`, `ORIGIN_TYPES`, `CHANNEL_TYPES`, `INGESTION_STATUSES`
    - `DEFAULT_PAGE_SIZE = 50`
    - `MAX_RETRY_ATTEMPTS = 3`
+   - `TRACKER_DOMAINS` — list of known email tracking pixel domains (e.g., `list-manage.com`, `doubleclick.net`, `mailchimp.com/track`, `open.substack.com`) used by the sanitizer to strip tracking images. Provides a functional baseline for Phase 0; can be extended in later phases.
 
 3. **`src/url.ts`** — URL normalization:
    - `normalizeUrl(url: string): string` — strip `utm_*`, `fbclid`, `gclid`, trailing slashes, `www.` prefix, sort query params
@@ -234,6 +242,8 @@ apps/email-worker/src/index.ts
 
 11. **Tests:** Query tests using `@cloudflare/vitest-pool-workers` (miniflare) with a real D1 binding. Test each query module with fixture data.
 
+12. **Schema-type drift test:** A test that runs the migration against a fresh D1 instance, introspects the resulting table structure via `PRAGMA table_info(...)`, and compares column names and types against the TypeScript interfaces in `@focus-reader/shared`. This catches manual drift between the SQL migration and the TS types without requiring a codegen tool.
+
 > **Note:** Query helpers for `listDocuments`, `softDeleteDocument`, `listSubscriptions`, `listTags`, `listDenylist`, etc. are deferred to Phase 1 when the API/UI needs them. Only the queries required by the email worker are implemented here.
 
 ---
@@ -245,7 +255,7 @@ apps/email-worker/src/index.ts
 **Deliverables:**
 
 1. **`src/sanitize.ts`** — HTML sanitization using DOMPurify + linkedom:
-   - `sanitizeHtml(html: string): string` — remove tracking pixels (1x1 images, known tracker domains), strip `<script>`, `<style>`, `on*` attributes, external scripts. Preserve layout, images, and inline styles.
+   - `sanitizeHtml(html: string): string` — remove tracking pixels (1x1 images, domains matching `TRACKER_DOMAINS` from `@focus-reader/shared`), strip `<script>`, `<style>`, `on*` attributes, external scripts. Preserve layout, images, and inline styles.
    - `rewriteCidUrls(html: string, documentId: string, cidMap: Map<string, string>): string` — replace `src="cid:..."` references in sanitized HTML with proxy URLs (`/api/attachments/{documentId}/{contentId}`). Called after sanitization but before storage. The proxy endpoint is implemented in Phase 1 with the web app; the URLs are stable and predictable.
    - Export a configured DOMPurify instance.
 
@@ -354,6 +364,9 @@ Steps 3 and 4 can be parallelized since both depend only on `packages/shared`.
 ## 4. Local Development Workflow
 
 ```bash
+# First-time setup: sync local secrets
+./scripts/sync-secrets.sh
+
 # Terminal 1: Start the email worker
 pnpm --filter apps/email-worker dev
 
@@ -366,14 +379,18 @@ pnpm test                                # All tests
 pnpm --filter @focus-reader/parser test  # Just parser tests
 pnpm --filter @focus-reader/db test      # Just db tests
 
-# Apply migrations to local D1
+# Apply migrations to local D1 (from the authoritative packages/db)
 pnpm db:migrate
+
+# Replay a specific .eml file against the local worker
+npx tsx scripts/ingest-local.ts ./fixtures/substack-example.eml
+npx tsx scripts/ingest-local.ts ./fixtures/nyt-morning.eml --recipient nyt@read.example.com
 
 # Inspect local D1 data after receiving test emails
 pnpm --filter apps/email-worker exec -- wrangler d1 execute FOCUS_DB --local --command "SELECT id, title, type FROM document ORDER BY saved_at DESC LIMIT 10"
 ```
 
-**Local email testing:** Use `wrangler email` CLI or send test emails via a real email client to the catch-all domain. For purely local testing without DNS, use fixture `.eml` files in integration tests.
+**Local email testing:** Use `scripts/ingest-local.ts` to replay `.eml` fixture files against the local worker — this is the primary debugging workflow for testing how specific newsletter layouts are sanitized and rewritten. For live testing, use `wrangler email` CLI or send real emails to the catch-all domain. Integration tests also use fixture `.eml` files directly.
 
 ---
 
@@ -389,14 +406,14 @@ Before deploying Phase 0 to production:
 2. **Cloudflare resources:**
    - D1 database created (`focus-reader-db`)
    - R2 bucket created (`focus-reader-storage`)
-   - Database ID added to `apps/email-worker/wrangler.toml`
+   - Database ID added to `packages/db/wrangler.toml` (authoritative migration config) and `apps/email-worker/wrangler.toml`
 
 3. **Secrets:**
    - `OWNER_EMAIL` set via `wrangler secret put` for `apps/email-worker`
    - `EMAIL_DOMAIN` set in `wrangler.toml` `[vars]` for `apps/email-worker`
 
 4. **Deploy:**
-   - Run migrations: `wrangler d1 migrations apply FOCUS_DB --remote`
+   - Run migrations from the authoritative location: `cd packages/db && wrangler d1 migrations apply FOCUS_DB --remote`
    - Deploy email worker: `cd apps/email-worker && wrangler deploy`
 
 5. **Validation:**
