@@ -84,7 +84,7 @@ describe("htmlToMarkdown", () => {
 });
 
 describe("real Substack email integration", () => {
-  it("produces clean markdown from a real Substack newsletter", async () => {
+  it("Astral Codex Ten — AMA (Ask Machines Anything)", async () => {
     const raw = loadFixture("substack-newsletter.eml");
     const parsed = await parseEmail(raw);
 
@@ -108,5 +108,49 @@ describe("real Substack email integration", () => {
     // Actual newsletter content should survive
     expect(markdown).toContain("AMA (Ask Machines Anything)");
     expect(markdown).toContain("AI");
+  });
+
+  it("Noahpinion — You are no longer the smartest type of thing on Earth", async () => {
+    const raw = loadFixture("substack-newsletter-1.eml");
+    const parsed = await parseEmail(raw);
+
+    expect(parsed.subject).toBe("You are no longer the smartest type of thing on Earth");
+    expect(parsed.html).toBeTruthy();
+
+    const sanitized = sanitizeHtml(parsed.html!);
+    const markdown = htmlToMarkdown(sanitized);
+
+    // No layout table remnants
+    expect(markdown).not.toContain("<table");
+    expect(markdown).not.toContain("<td");
+    expect(markdown).not.toContain("<tr");
+
+    // No invisible preheader characters
+    expect(markdown).not.toMatch(/[\u034F\u00AD\u200B\u200C\u200D\u2060\uFEFF]/);
+
+    // Actual content survives
+    expect(markdown).toContain("You are no longer the smartest type of thing on Earth");
+  });
+
+  it("AINews — Gemini 3, Anthropic, GPT-5.3, MiniMax", async () => {
+    const raw = loadFixture("substack-newsletter-2.eml");
+    const parsed = await parseEmail(raw);
+
+    expect(parsed.subject).toContain("AINews");
+    expect(parsed.html).toBeTruthy();
+
+    const sanitized = sanitizeHtml(parsed.html!);
+    const markdown = htmlToMarkdown(sanitized);
+
+    // No layout table remnants
+    expect(markdown).not.toContain("<table");
+    expect(markdown).not.toContain("<td");
+    expect(markdown).not.toContain("<tr");
+
+    // No invisible preheader characters
+    expect(markdown).not.toMatch(/[\u034F\u00AD\u200B\u200C\u200D\u2060\uFEFF]/);
+
+    // Actual content survives
+    expect(markdown).toContain("AINews");
   });
 });
