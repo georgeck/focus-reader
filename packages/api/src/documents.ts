@@ -5,7 +5,7 @@ import type {
   UpdateDocumentInput,
   Document,
 } from "@focus-reader/shared";
-import { nowISO } from "@focus-reader/shared";
+import { nowISO, normalizeUrl } from "@focus-reader/shared";
 import {
   listDocuments,
   getDocumentWithTags,
@@ -14,6 +14,7 @@ import {
   createDocument,
   getDocumentByUrl,
 } from "@focus-reader/db";
+import { extractArticle, extractMetadata } from "@focus-reader/parser";
 
 export async function getDocuments(
   db: D1Database,
@@ -62,19 +63,79 @@ export async function createBookmark(
   url: string,
   options?: { type?: "article" | "bookmark" }
 ): Promise<Document> {
+  // Normalize URL for deduplication
+  const normalized = normalizeUrl(url);
+
   // Check for duplicate
-  const existing = await getDocumentByUrl(db, url);
+  const existing = await getDocumentByUrl(db, normalized);
   if (existing) {
     throw new DuplicateUrlError(existing.id);
   }
 
+  // Fetch the page HTML
+  let html: string | null = null;
+  try {
+    const response = await fetch(url, {
+      headers: { "User-Agent": "FocusReader/1.0" },
+      redirect: "follow",
+    });
+    if (response.ok) {
+      html = await response.text();
+    }
+  } catch {
+    // Fetch failed — create a bare bookmark with URL as title
+  }
+
+  const type = options?.type ?? "bookmark";
+
+  if (html) {
+    // Try full article extraction first
+    const article = extractArticle(html, url);
+    if (article.title && article.htmlContent) {
+      // Extract metadata for supplementary info (OG image, favicon)
+      const meta = extractMetadata(html, url);
+
+      const doc = await createDocument(db, {
+        type,
+        url: normalized,
+        title: article.title,
+        author: article.author,
+        excerpt: article.excerpt,
+        word_count: article.wordCount,
+        reading_time_minutes: article.readingTimeMinutes,
+        site_name: article.siteName || meta.siteName,
+        cover_image_url: meta.ogImage,
+        html_content: article.htmlContent,
+        markdown_content: article.markdownContent,
+        published_at: meta.publishedDate,
+        origin_type: "manual",
+      });
+      return doc;
+    }
+
+    // Fallback: use OG metadata only (lightweight bookmark)
+    const meta = extractMetadata(html, url);
+    const doc = await createDocument(db, {
+      type: "bookmark",
+      url: normalized,
+      title: meta.title || url,
+      author: meta.author,
+      excerpt: meta.description,
+      site_name: meta.siteName,
+      cover_image_url: meta.ogImage,
+      published_at: meta.publishedDate,
+      origin_type: "manual",
+    });
+    return doc;
+  }
+
+  // No HTML available — bare bookmark
   const doc = await createDocument(db, {
-    type: options?.type ?? "bookmark",
-    url,
-    title: url, // Will be updated after extraction
+    type: "bookmark",
+    url: normalized,
+    title: url,
     origin_type: "manual",
   });
-
   return doc;
 }
 

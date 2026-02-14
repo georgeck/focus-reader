@@ -27,12 +27,17 @@ export function AppShell({ children }: AppShellProps) {
     toggleRightPanel,
     toggleToc,
     toggleContentMode,
+    focusMode,
+    toggleFocusMode,
   } = useApp();
 
   const shortcuts = useMemo(
     () => ({
       "[": toggleSidebar,
       "]": toggleRightPanel,
+      f: () => {
+        if (isReadingView) toggleFocusMode();
+      },
       Escape: () => {
         if (isReadingView) {
           const params = new URLSearchParams(searchParams.toString());
@@ -47,6 +52,7 @@ export function AppShell({ children }: AppShellProps) {
       toggleSidebar,
       toggleRightPanel,
       toggleContentMode,
+      toggleFocusMode,
       isReadingView,
       searchParams,
       router,
@@ -69,7 +75,7 @@ export function AppShell({ children }: AppShellProps) {
       {/* Reading View */}
       {isReadingView && (
         <>
-          <ReaderToc documentId={selectedDocId} />
+          {!focusMode && <ReaderToc documentId={selectedDocId} />}
           <div className="flex flex-1 flex-col min-w-0">
             <ReaderToolbar documentId={selectedDocId} />
             <ReaderContent documentId={selectedDocId} />
@@ -77,8 +83,8 @@ export function AppShell({ children }: AppShellProps) {
         </>
       )}
 
-      {/* Persistent right sidebar */}
-      <RightSidebar />
+      {/* Right sidebar — hidden in focus mode */}
+      {!focusMode && <RightSidebar />}
     </div>
   );
 }

@@ -13,6 +13,8 @@ interface AppState {
   toggleToc: () => void;
   contentMode: "html" | "markdown";
   toggleContentMode: () => void;
+  focusMode: boolean;
+  toggleFocusMode: () => void;
 }
 
 const AppContext = createContext<AppState | null>(null);
@@ -23,6 +25,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [rightPanelVisible, setRightPanelVisible] = useState(true);
   const [tocVisible, setTocVisible] = useState(true);
   const [contentMode, setContentMode] = useState<"html" | "markdown">("html");
+  const [focusMode, setFocusMode] = useState(false);
 
   const toggleSidebar = useCallback(() => setSidebarCollapsed((v) => !v), []);
   const toggleRightPanel = useCallback(() => setRightPanelVisible((v) => !v), []);
@@ -31,6 +34,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     () => setContentMode((v) => (v === "html" ? "markdown" : "html")),
     []
   );
+  const toggleFocusMode = useCallback(() => setFocusMode((v) => !v), []);
 
   return (
     <AppContext.Provider
@@ -45,6 +49,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         toggleToc,
         contentMode,
         toggleContentMode,
+        focusMode,
+        toggleFocusMode,
       }}
     >
       {children}

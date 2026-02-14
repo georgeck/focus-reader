@@ -4,6 +4,9 @@ interface Env {
   FOCUS_DB: D1Database;
   FOCUS_STORAGE: R2Bucket;
   EMAIL_DOMAIN?: string;
+  OWNER_EMAIL?: string;
+  CF_ACCESS_TEAM_DOMAIN?: string;
+  CF_ACCESS_AUD?: string;
 }
 
 export async function getEnv(): Promise<Env> {

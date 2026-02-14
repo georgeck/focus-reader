@@ -42,6 +42,7 @@ const SHORTCUT_GROUPS = [
       { key: "[", action: "Toggle left panel" },
       { key: "]", action: "Toggle right panel" },
       { key: "Shift+H", action: "Toggle HTML / Markdown" },
+      { key: "f", action: "Toggle focus mode" },
     ],
   },
   {

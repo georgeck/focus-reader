@@ -26,6 +26,8 @@ import {
   BookOpen,
   BookX,
   PanelLeft,
+  Maximize2,
+  Minimize2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useApp } from "@/contexts/app-context";
@@ -39,7 +41,7 @@ export function ReaderToolbar({ documentId }: ReaderToolbarProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { document: doc, mutate } = useDocument(documentId);
-  const { toggleToc } = useApp();
+  const { toggleToc, focusMode, toggleFocusMode } = useApp();
 
   const goBack = () => {
     const params = new URLSearchParams(searchParams.toString());
@@ -109,6 +111,9 @@ export function ReaderToolbar({ documentId }: ReaderToolbarProps) {
       </Button>
       <Button variant="ghost" size="icon" className="size-8" onClick={toggleToc}>
         <PanelLeft className="size-4" />
+      </Button>
+      <Button variant="ghost" size="icon" className="size-8" onClick={toggleFocusMode}>
+        {focusMode ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
       </Button>
 
       {/* Spacer */}

@@ -2,16 +2,29 @@
 
 import { useState } from "react";
 import { useSubscriptions } from "@/hooks/use-subscriptions";
+import { useTags } from "@/hooks/use-tags";
 import { apiFetch } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Trash2 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Trash2, Copy, Check, Pencil, Tag, X } from "lucide-react";
 import { toast } from "sonner";
 
 export default function SubscriptionsSettingsPage() {
   const { subscriptions, isLoading, mutate } = useSubscriptions();
+  const { tags } = useTags();
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const toggleActive = async (id: string, currentActive: number) => {
     const newVal = currentActive === 1 ? 0 : 1;
@@ -34,6 +47,38 @@ export default function SubscriptionsSettingsPage() {
     } finally {
       setDeletingId(null);
     }
+  };
+
+  const startRename = (id: string, currentName: string) => {
+    setEditingId(id);
+    setEditName(currentName);
+  };
+
+  const saveRename = async (id: string) => {
+    const trimmed = editName.trim();
+    if (!trimmed) return;
+    await apiFetch(`/api/subscriptions/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ display_name: trimmed }),
+    });
+    mutate();
+    setEditingId(null);
+    toast("Renamed");
+  };
+
+  const copyEmail = (id: string, email: string) => {
+    navigator.clipboard.writeText(email);
+    setCopiedId(id);
+    toast("Email copied to clipboard");
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const addTagToSub = async (subId: string, tagId: string) => {
+    await apiFetch(`/api/subscriptions/${subId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ addTagId: tagId }),
+    });
+    mutate();
   };
 
   return (
@@ -61,31 +106,124 @@ export default function SubscriptionsSettingsPage() {
 
       <div className="divide-y rounded-lg border">
         {subscriptions.map((sub) => (
-          <div key={sub.id} className="flex items-center gap-4 px-4 py-3">
-            <span className="flex size-8 items-center justify-center rounded-full bg-primary/10 text-sm font-medium text-primary">
-              {sub.display_name.charAt(0).toUpperCase()}
-            </span>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate">
-                {sub.display_name}
-              </p>
-              <p className="text-xs text-muted-foreground truncate">
-                {sub.sender_address} &middot; {sub.documentCount} documents
-              </p>
+          <div key={sub.id} className="px-4 py-3 space-y-2">
+            <div className="flex items-center gap-3">
+              <span className="flex size-8 items-center justify-center rounded-full bg-primary/10 text-sm font-medium text-primary flex-shrink-0">
+                {sub.display_name.charAt(0).toUpperCase()}
+              </span>
+              <div className="flex-1 min-w-0">
+                {editingId === sub.id ? (
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") saveRename(sub.id);
+                        if (e.key === "Escape") setEditingId(null);
+                      }}
+                      className="h-7 text-sm"
+                      autoFocus
+                    />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-7"
+                      onClick={() => saveRename(sub.id)}
+                    >
+                      <Check className="size-3" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-7"
+                      onClick={() => setEditingId(null)}
+                    >
+                      <X className="size-3" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium truncate">
+                      {sub.display_name}
+                    </p>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-6 opacity-0 group-hover:opacity-100 hover:opacity-100"
+                      onClick={() => startRename(sub.id, sub.display_name)}
+                    >
+                      <Pencil className="size-3" />
+                    </Button>
+                  </div>
+                )}
+                <div className="flex items-center gap-2 mt-0.5">
+                  <button
+                    onClick={() => copyEmail(sub.id, sub.pseudo_email)}
+                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {copiedId === sub.id ? (
+                      <Check className="size-3 text-green-500" />
+                    ) : (
+                      <Copy className="size-3" />
+                    )}
+                    <span className="font-mono truncate max-w-[200px]">
+                      {sub.pseudo_email}
+                    </span>
+                  </button>
+                  <span className="text-xs text-muted-foreground">
+                    &middot; {sub.documentCount} docs
+                  </span>
+                  {sub.unreadCount > 0 && (
+                    <span className="text-xs text-muted-foreground">
+                      &middot; {sub.unreadCount} unread
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-1">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-8 text-muted-foreground"
+                    >
+                      <Tag className="size-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    {tags.length === 0 && (
+                      <DropdownMenuItem disabled>No tags</DropdownMenuItem>
+                    )}
+                    {tags.map((tag) => (
+                      <DropdownMenuItem
+                        key={tag.id}
+                        onClick={() => addTagToSub(sub.id, tag.id)}
+                      >
+                        <span
+                          className="size-2 rounded-full mr-2"
+                          style={{ backgroundColor: tag.color || "#6366f1" }}
+                        />
+                        {tag.name}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <Switch
+                  checked={sub.is_active === 1}
+                  onCheckedChange={() => toggleActive(sub.id, sub.is_active)}
+                />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-8 text-muted-foreground hover:text-destructive"
+                  onClick={() => deleteSub(sub.id)}
+                  disabled={deletingId === sub.id}
+                >
+                  <Trash2 className="size-4" />
+                </Button>
+              </div>
             </div>
-            <Switch
-              checked={sub.is_active === 1}
-              onCheckedChange={() => toggleActive(sub.id, sub.is_active)}
-            />
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-8 text-muted-foreground hover:text-destructive"
-              onClick={() => deleteSub(sub.id)}
-              disabled={deletingId === sub.id}
-            >
-              <Trash2 className="size-4" />
-            </Button>
           </div>
         ))}
       </div>
