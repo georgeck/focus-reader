@@ -1,0 +1,35 @@
+{
+  "name": "@focus-reader/parser",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@focus-reader/shared": "workspace:*",
+    "dompurify": "^3",
+    "linkedom": "^0.18",
+    "postal-mime": "^2",
+    "turndown": "^7"
+  },
+  "devDependencies": {
+    "@types/dompurify": "^3",
+    "@types/turndown": "^5",
+    "tsup": "^8",
+    "typescript": "^5",
+    "vitest": "~3.2.0"
+  }
+}

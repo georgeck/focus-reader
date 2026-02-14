@@ -1,0 +1,25 @@
+// Table name constants
+export const Tables = {
+  DOCUMENT: "document",
+  DOCUMENT_EMAIL_META: "document_email_meta",
+  DOCUMENT_PDF_META: "document_pdf_meta",
+  SUBSCRIPTION: "subscription",
+  FEED: "feed",
+  TAG: "tag",
+  HIGHLIGHT: "highlight",
+  COLLECTION: "collection",
+  ATTACHMENT: "attachment",
+  DENYLIST: "denylist",
+  INGESTION_LOG: "ingestion_log",
+  FEED_TOKEN: "feed_token",
+  API_KEY: "api_key",
+  SAVED_VIEW: "saved_view",
+  USER_PREFERENCES: "user_preferences",
+  INGESTION_REPORT_DAILY: "ingestion_report_daily",
+  // Join tables
+  DOCUMENT_TAGS: "document_tags",
+  SUBSCRIPTION_TAGS: "subscription_tags",
+  FEED_TAGS: "feed_tags",
+  HIGHLIGHT_TAGS: "highlight_tags",
+  COLLECTION_DOCUMENTS: "collection_documents",
+} as const;

@@ -1,0 +1,15 @@
+From: noreply@newsletter.example.com
+To: test@read.example.com
+Subject: Please confirm your subscription
+Date: Thu, 13 Feb 2026 10:00:00 -0500
+Message-ID: <confirm001@newsletter.example.com>
+MIME-Version: 1.0
+Content-Type: text/html; charset="UTF-8"
+
+<html>
+<body>
+<h1>Confirm your email</h1>
+<p>Please click the link below to confirm your subscription.</p>
+<a href="https://newsletter.example.com/confirm/abc123">Click here to confirm your email</a>
+</body>
+</html>

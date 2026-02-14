@@ -1,0 +1,27 @@
+From: noreply@newsletter.example.com
+To: test-sub@read.example.com
+Subject: Please confirm your subscription
+Date: Thu, 13 Feb 2026 09:00:00 -0500
+Message-ID: <confirm001@newsletter.example.com>
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="confirm-boundary"
+
+--confirm-boundary
+Content-Type: text/plain; charset="UTF-8"
+
+Please click below to confirm your email subscription.
+
+Confirm: https://newsletter.example.com/confirm?token=abc123
+
+--confirm-boundary
+Content-Type: text/html; charset="UTF-8"
+
+<html>
+<body>
+<h1>Confirm Your Subscription</h1>
+<p>Please click the link below to confirm your email address:</p>
+<a href="https://newsletter.example.com/confirm?token=abc123">Confirm your email</a>
+</body>
+</html>
+
+--confirm-boundary--

@@ -3,3 +3,11 @@
 **/Thumbs.db
 
 .claude/worktrees/**
+
+node_modules/
+dist/
+.next/
+.wrangler/
+.dev.vars
+*.local
+.turbo/

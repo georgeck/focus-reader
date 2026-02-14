@@ -1,0 +1,39 @@
+From: Design Weekly <newsletter@designweekly.com>
+To: design-weekly@read.example.com
+Subject: This Week in Design
+Date: Thu, 13 Feb 2026 10:00:00 -0500
+Message-ID: <design001@designweekly.com>
+MIME-Version: 1.0
+Content-Type: multipart/related; boundary="related-boundary"
+
+--related-boundary
+Content-Type: multipart/alternative; boundary="alt-boundary"
+
+--alt-boundary
+Content-Type: text/plain; charset="UTF-8"
+
+This week in design: great things happened.
+
+--alt-boundary
+Content-Type: text/html; charset="UTF-8"
+
+<html>
+<body>
+<h1>This Week in Design</h1>
+<p>Check out this amazing illustration:</p>
+<img src="cid:hero-image@designweekly" alt="Hero Illustration" />
+<p>More content below.</p>
+</body>
+</html>
+
+--alt-boundary--
+
+--related-boundary
+Content-Type: image/png
+Content-Transfer-Encoding: base64
+Content-ID: <hero-image@designweekly>
+Content-Disposition: inline; filename="hero.png"
+
+iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==
+
+--related-boundary--

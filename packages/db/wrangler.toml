@@ -1,0 +1,8 @@
+name = "focus-reader-db-migrations"
+compatibility_date = "2026-02-13"
+
+[[d1_databases]]
+binding = "FOCUS_DB"
+database_name = "focus-reader-db"
+database_id = "LOCAL_PLACEHOLDER"
+migrations_dir = "migrations"

@@ -1,0 +1,35 @@
+From: Morning Brew <newsletter@morningbrew.com>
+To: morning-brew@read.example.com
+Subject: Daily Digest - Feb 13
+Date: Thu, 13 Feb 2026 08:00:00 -0500
+Message-ID: <msg001@morningbrew.com>
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="boundary123"
+
+--boundary123
+Content-Type: text/plain; charset="UTF-8"
+
+Good morning! Here is your daily digest.
+
+Top Stories:
+1. Markets are up
+2. Tech earnings beat expectations
+
+--boundary123
+Content-Type: text/html; charset="UTF-8"
+
+<html>
+<body>
+<h1>Good morning!</h1>
+<p>Here is your daily digest.</p>
+<h2>Top Stories</h2>
+<ol>
+<li>Markets are up</li>
+<li>Tech earnings beat expectations</li>
+</ol>
+<img src="https://open.substack.com/pixel/track.gif" width="1" height="1" />
+<img src="https://example.com/hero.jpg" alt="Hero" />
+</body>
+</html>
+
+--boundary123--
