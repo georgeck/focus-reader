@@ -6,7 +6,7 @@ This document contains everything an AI agent needs to work effectively on the F
 
 Focus Reader is a self-hosted read-it-later app deployed on Cloudflare (Workers, D1, R2, Pages). It ingests content from email newsletters, web articles, RSS feeds, and bookmarks into a unified reading interface.
 
-**Current state:** Phase 0 complete (email ingestion pipeline). Phase 1 (API + web UI) is next.
+**Current state:** Phase 0 (email ingestion) and Phase 1 (API + web UI) complete. Phase 2 (RSS, search, highlights) is next.
 
 ### Specification Documents
 
@@ -17,7 +17,7 @@ Detailed specs live in `agents/spec/` and implementation plans in `agents/plans/
 - `agents/spec/repo-structure.md` — Monorepo structure rationale and conventions
 - `agents/spec/improvements.md` — Design improvements and open questions
 - `agents/plans/phase-0-plan.md` — Phase 0 implementation plan (completed)
-- `agents/plans/phase-1-plan.md` — Phase 1 implementation plan (next)
+- `agents/plans/phase-1-plan.md` — Phase 1 implementation plan (completed)
 
 **Always read the relevant spec before implementing a feature.** The specs define entity schemas, validation rules, and edge cases.
 
@@ -29,10 +29,10 @@ focus-reader/
 │   ├── shared/          # Types, constants, utilities (no deps)
 │   ├── db/              # D1 migrations, typed query helpers
 │   ├── parser/          # Email parsing, HTML sanitization, Markdown conversion
-│   └── api/             # REST API business logic (Phase 1, empty shell)
+│   └── api/             # REST API business logic (documents, subscriptions, tags, denylist)
 ├── apps/
 │   ├── email-worker/    # Cloudflare Email Worker
-│   └── web/             # Next.js frontend (Phase 1, minimal shell)
+│   └── web/             # Next.js 15 frontend on Cloudflare Pages
 ├── scripts/
 │   ├── sync-secrets.sh  # Propagate .dev.vars across workspaces
 │   └── ingest-local.ts  # Local .eml testing helper
@@ -137,11 +137,11 @@ Uses **turndown** with linkedom for DOM parsing (turndown needs a `document` to 
 
 ### Test Frameworks
 
-| Package | Test Runner | Environment |
-|---------|------------|-------------|
-| `shared` | vitest | Node.js |
-| `parser` | vitest | Node.js |
-| `db` | vitest + `@cloudflare/vitest-pool-workers` | workerd (D1) |
+| Package        | Test Runner                                | Environment       |
+|----------------|--------------------------------------------|-------------------|
+| `shared`       | vitest                                     | Node.js           |
+| `parser`       | vitest                                     | Node.js           |
+| `db`           | vitest + `@cloudflare/vitest-pool-workers` | workerd (D1)      |
 | `email-worker` | vitest + `@cloudflare/vitest-pool-workers` | workerd (D1 + R2) |
 
 ### Version Constraints
@@ -171,10 +171,10 @@ Uses **turndown** with linkedom for DOM parsing (turndown needs a `document` to 
 
 ## Cloudflare Bindings
 
-| Binding | Type | Used By |
-|---------|------|---------|
-| `FOCUS_DB` | D1 Database | email-worker, db (migrations) |
-| `FOCUS_STORAGE` | R2 Bucket | email-worker |
+| Binding         | Type        | Used By                            |
+|-----------------|-------------|------------------------------------|
+| `FOCUS_DB`      | D1 Database | email-worker, web, db (migrations) |
+| `FOCUS_STORAGE` | R2 Bucket   | email-worker, web                  |
 
 Environment variables:
 - `EMAIL_DOMAIN` — Catch-all email subdomain (e.g., `read.yourdomain.com`)
@@ -203,6 +203,71 @@ The email worker (`apps/email-worker/src/index.ts`) implements a 17-step pipelin
 17. Log ingestion event
 
 The outer handler wraps the pipeline in `withRetry(3, fn)` with exponential backoff. The raw stream is read once before the retry loop.
+
+## Web App Architecture
+
+The web app (`apps/web`) is a Next.js 15 App Router application deployed to Cloudflare Pages via `@opennextjs/cloudflare`.
+
+### Stack
+
+- **Framework:** Next.js 15 (App Router, React 19)
+- **Styling:** Tailwind CSS v4 + shadcn/ui (new-york style, 16 components in `src/components/ui/`)
+- **Data fetching:** SWR (client-side), `useSWRInfinite` for paginated lists
+- **State:** URL search params (`?doc=<id>` for reading view), React context for UI state
+- **Theming:** `next-themes` (light/dark/system), CSS variables with oklch colors
+
+### Route Structure
+
+```
+app/
+├── page.tsx                    # Redirects to /inbox
+├── layout.tsx                  # Root: Inter font, ThemeProvider, Toaster
+├── (reader)/                   # Reader layout group (AppProvider + SWRConfig + AppShell)
+│   ├── layout.tsx
+│   ├── inbox/page.tsx
+│   ├── later/page.tsx
+│   ├── archive/page.tsx
+│   ├── all/page.tsx
+│   ├── starred/page.tsx
+│   ├── subscriptions/[id]/page.tsx
+│   └── tags/[id]/page.tsx
+├── settings/                   # Settings layout group
+│   ├── layout.tsx
+│   ├── page.tsx                # General (theme toggle)
+│   ├── subscriptions/page.tsx
+│   ├── denylist/page.tsx
+│   └── email/page.tsx
+└── api/                        # Next.js Route Handlers
+    ├── documents/              # GET (list), POST (create bookmark)
+    ├── documents/[id]/         # GET, PATCH, DELETE
+    ├── documents/[id]/content/ # GET (HTML/markdown from R2)
+    ├── subscriptions/          # GET
+    ├── subscriptions/[id]/     # PATCH, DELETE
+    ├── tags/                   # GET, POST
+    ├── tags/[id]/              # PATCH, DELETE
+    ├── denylist/               # GET, POST
+    └── denylist/[id]/          # DELETE
+```
+
+### Key Patterns
+
+- **Two-mode layout:** `AppShell` switches between Library View (sidebar + document list + right panel) and Reading View (TOC + content + right panel) based on `?doc=` search param
+- **API routes** use `getDb()`/`getR2()` from `src/lib/bindings.ts` to access Cloudflare D1/R2 bindings, then call into `@focus-reader/api` business logic
+- **Client API calls** go through `apiFetch()` from `src/lib/api-client.ts` which handles JSON headers and error wrapping (`ApiClientError`)
+- **Keyboard shortcuts** registered via `useKeyboardShortcuts` hook; respects input focus (disabled in inputs/textareas)
+- **Article extraction** for bookmarks uses `@mozilla/readability` + linkedom in `packages/parser/src/article.ts`
+- **No auth** in Phase 1 (single-user app). Auth middleware planned for Phase 2+
+
+### Cloudflare Bindings (Web)
+
+Access via `@opennextjs/cloudflare`'s `getCloudflareContext()`:
+
+```typescript
+import { getCloudflareContext } from "@opennextjs/cloudflare";
+const { env } = await getCloudflareContext();
+const db: D1Database = env.FOCUS_DB;
+const r2: R2Bucket = env.FOCUS_STORAGE;
+```
 
 ## Common Pitfalls
 
