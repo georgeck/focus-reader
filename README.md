@@ -71,6 +71,35 @@ pnpm --filter focus-reader-web dev
 pnpm --filter @focus-reader/db migrate
 ```
 
+### Local Email Ingestion
+
+You can ingest `.eml` files locally to test the full pipeline (parse, sanitize, store) and inspect the results in a local D1 SQLite database:
+
+```bash
+# Build first (the ingestion script uses the compiled worker)
+pnpm build
+
+# Ingest an .eml file
+pnpm tsx scripts/ingest-local.ts path/to/email.eml
+
+# Override the recipient address
+pnpm tsx scripts/ingest-local.ts path/to/email.eml --recipient user@level-up.dev
+```
+
+The script starts a Miniflare instance, applies migrations, runs the email handler, and prints the stored documents.
+
+To query the local D1 database after ingestion:
+
+```bash
+# Via the script's Miniflare instance (shown after ingestion)
+pnpm --filter focus-reader-email-worker exec -- \
+  wrangler d1 execute FOCUS_DB --local \
+  --command "SELECT id, title, type FROM document ORDER BY saved_at DESC LIMIT 10"
+
+# Or open the SQLite file directly
+sqlite3 apps/email-worker/.wrangler/state/miniflare-D1DatabaseObject/*.sqlite
+```
+
 ### Deployment
 
 1. Update `wrangler.toml` files with your Cloudflare D1 database ID and R2 bucket name.

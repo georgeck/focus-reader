@@ -1,19 +1,18 @@
 /**
  * Local email ingestion script.
- * Reads a .eml file from disk and replays it against the local email worker
- * using wrangler's unstable_dev API.
+ * Reads a .eml file from disk, spins up a Miniflare instance with the
+ * email worker, and invokes the email handler directly.
  *
  * Usage:
- *   npx tsx scripts/ingest-local.ts <path-to-eml-file>
- *   npx tsx scripts/ingest-local.ts <path-to-eml-file> --recipient user@read.example.com
+ *   pnpm tsx scripts/ingest-local.ts <path-to-eml-file>
+ *   pnpm tsx scripts/ingest-local.ts <path-to-eml-file> --recipient user@read.example.com
  *
- * The script starts a local workerd instance, invokes the email handler directly,
- * then shuts down. D1/R2 state persists in apps/email-worker/.wrangler/state/.
+ * D1/R2 state persists in apps/email-worker/.wrangler/state/.
  */
 
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { unstable_dev } from "wrangler";
+import { Miniflare } from "miniflare";
 
 // Parse arguments
 const args = process.argv.slice(2);
@@ -31,7 +30,7 @@ for (let i = 0; i < args.length; i++) {
 
 if (!emlPath) {
   console.error(
-    "Usage: npx tsx scripts/ingest-local.ts <path-to-eml-file> [--recipient addr@domain]"
+    "Usage: pnpm tsx scripts/ingest-local.ts <path-to-eml-file> [--recipient addr@domain]"
   );
   process.exit(1);
 }
@@ -54,90 +53,113 @@ console.log(`From: ${fromMatch?.[1] || "(unknown)"}`);
 console.log(`To: ${recipient}${recipientOverride ? " (overridden)" : ""}`);
 console.log();
 
-// Start local worker via wrangler's dev API
-const workerPath = resolve(
-  import.meta.dirname || ".",
-  "../apps/email-worker/src/index.ts"
-);
-const configPath = resolve(
-  import.meta.dirname || ".",
-  "../apps/email-worker/wrangler.toml"
-);
+const scriptDir = import.meta.dirname || resolve("scripts");
+const repoRoot = resolve(scriptDir, "..");
+const workerPath = resolve(repoRoot, "apps/email-worker/dist/index.js");
+const persistDir = resolve(repoRoot, "apps/email-worker/.wrangler/state");
+const migrationsPath = resolve(repoRoot, "packages/db/migrations/0001_initial_schema.sql");
 
-console.log("Starting local worker...");
-const worker = await unstable_dev(workerPath, {
-  config: configPath,
-  experimental: { disableExperimentalWarning: true },
-  local: true,
-  persist: true,
-});
+async function main() {
+  console.log("Starting Miniflare...");
+  const mf = new Miniflare({
+    modules: true,
+    scriptPath: workerPath,
+    compatibilityDate: "2026-02-13",
+    compatibilityFlags: ["nodejs_compat"],
+    d1Databases: { FOCUS_DB: "focus-reader-db" },
+    r2Buckets: { FOCUS_STORAGE: "focus-reader-storage" },
+    bindings: {
+      EMAIL_DOMAIN: "level-up.dev",
+      COLLAPSE_PLUS_ALIAS: "true",
+    },
+    d1Persist: persistDir,
+    r2Persist: persistDir,
+  });
 
-try {
-  // Build a mock email message and invoke the handler
-  // unstable_dev doesn't expose the email handler directly, so we use the
-  // worker's module to call it via the service binding approach.
-  // Instead, we POST the raw EML to a special /__email endpoint that we
-  // invoke directly on the worker module.
+  try {
+    // Apply migrations via batch of prepared statements.
+    // Make CREATE statements idempotent for repeat runs.
+    const db = await mf.getD1Database("FOCUS_DB");
+    const migrationSql = readFileSync(migrationsPath, "utf-8")
+      .replace(/CREATE TABLE /g, "CREATE TABLE IF NOT EXISTS ")
+      .replace(/CREATE INDEX /g, "CREATE INDEX IF NOT EXISTS ")
+      .replace(/CREATE UNIQUE INDEX /g, "CREATE UNIQUE INDEX IF NOT EXISTS ");
+    const statements = migrationSql
+      .split(";")
+      .map((s) => s.replace(/--.*$/gm, "").trim())
+      .filter(Boolean);
+    await db.batch(statements.map((s) => db.prepare(s)));
+    console.log(`Migrations applied (${statements.length} statements).`);
 
-  // Since unstable_dev doesn't support email triggers, we call the worker
-  // module's email() function directly via the miniflare instance.
-  const mf = (worker as any).mf || (worker as any).__mf;
-  if (!mf) {
-    // Fallback: POST raw EML bytes to the worker and let the user know
-    // that direct email invocation requires the test suite
-    console.error(
-      "Direct email handler invocation is not supported with this version of wrangler."
+    // Import the worker module and invoke its email handler
+    const { default: emailWorker } = await import(workerPath);
+
+    // Get bindings from Miniflare
+    const bindings = await mf.getBindings();
+
+    // Build ForwardableEmailMessage-like object
+    const raw = new ReadableStream({
+      start(controller: ReadableStreamDefaultController) {
+        controller.enqueue(new Uint8Array(emlBuffer));
+        controller.close();
+      },
+    });
+
+    const message = {
+      from:
+        fromMatch?.[1]?.match(/<([^>]+)>/)?.[1] ||
+        fromMatch?.[1] ||
+        "unknown@example.com",
+      to: recipient,
+      raw,
+      rawSize: emlBuffer.byteLength,
+      headers: new Headers(),
+      setReject() {},
+      forward() {
+        return Promise.resolve();
+      },
+      reply() {
+        return Promise.resolve();
+      },
+    };
+
+    const env = {
+      FOCUS_DB: bindings.FOCUS_DB,
+      FOCUS_STORAGE: bindings.FOCUS_STORAGE,
+      EMAIL_DOMAIN: "level-up.dev",
+      COLLAPSE_PLUS_ALIAS: "true",
+    };
+
+    console.log("Sending email to worker...");
+    await emailWorker.email(message, env, {
+      waitUntil() {},
+      passThroughOnException() {},
+    });
+
+    console.log("Done! Email processed successfully.");
+    console.log();
+
+    // Show what was stored
+    const result = await db
+      .prepare(
+        "SELECT id, title, type, saved_at FROM document ORDER BY saved_at DESC LIMIT 5"
+      )
+      .all();
+    console.log("Recent documents in D1:");
+    for (const row of result.results) {
+      console.log(`  ${row.id}  ${row.title}  [${row.type}]  ${row.saved_at}`);
+    }
+    console.log();
+    console.log("To query more:");
+    console.log(
+      '  pnpm --filter focus-reader-email-worker exec -- wrangler d1 execute FOCUS_DB --local --command "SELECT id, title FROM document"'
     );
-    console.error("Use the integration tests instead:");
-    console.error("  pnpm --filter focus-reader-email-worker test");
-    process.exit(1);
+  } finally {
+    await mf.dispose();
   }
-
-  const bindings = await mf.getBindings();
-  const { default: emailWorker } = await import(workerPath);
-
-  // Build ForwardableEmailMessage-like object
-  const raw = new ReadableStream({
-    start(controller) {
-      controller.enqueue(new Uint8Array(emlBuffer));
-      controller.close();
-    },
-  });
-
-  const message = {
-    from: fromMatch?.[1]?.match(/<([^>]+)>/)?.[1] || fromMatch?.[1] || "unknown@example.com",
-    to: recipient,
-    raw,
-    rawSize: emlBuffer.byteLength,
-    headers: new Headers(),
-    setReject() {},
-    forward() {
-      return Promise.resolve();
-    },
-    reply() {
-      return Promise.resolve();
-    },
-  };
-
-  const env = {
-    FOCUS_DB: bindings.FOCUS_DB,
-    FOCUS_STORAGE: bindings.FOCUS_STORAGE,
-    EMAIL_DOMAIN: bindings.EMAIL_DOMAIN || "read.yourdomain.com",
-    COLLAPSE_PLUS_ALIAS: bindings.COLLAPSE_PLUS_ALIAS || "false",
-  };
-
-  console.log("Sending email to worker...");
-  await emailWorker.email(message, env, {
-    waitUntil() {},
-    passThroughOnException() {},
-  });
-
-  console.log("Done! Email processed successfully.");
-  console.log();
-  console.log("Inspect results:");
-  console.log(
-    '  pnpm --filter focus-reader-email-worker exec -- wrangler d1 execute FOCUS_DB --local --command "SELECT id, title, type FROM document ORDER BY saved_at DESC LIMIT 10"'
-  );
-} finally {
-  await worker.stop();
 }
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

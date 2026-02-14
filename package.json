@@ -14,10 +14,15 @@
     "clean": "turbo run clean && rm -rf node_modules"
   },
   "devDependencies": {
+    "tsx": "^4.21.0",
     "turbo": "^2",
     "typescript": "^5"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild", "workerd", "sharp"]
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "workerd",
+      "sharp"
+    ]
   }
 }
