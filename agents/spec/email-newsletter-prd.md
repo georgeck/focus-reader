@@ -102,7 +102,7 @@ Use a **catch-all configuration on a dedicated subdomain** (e.g., `*@read.yourdo
 
 ### 4.0 Terminology Glossary
 
-- **Document:** The universal content entity in Focus Reader. Each ingested newsletter email is stored as a `Document` row with `type = 'email'` and `source_type = 'subscription'`. See [Focus Reader PRD](./focus-reader-prd.md), Section 5.1.
+- **Document:** The universal content entity in Focus Reader. Each ingested newsletter email is stored as a `Document` row with `type = 'email'` and `origin_type = 'subscription'`. See [Focus Reader PRD](./focus-reader-prd.md), Section 5.1.
 - **Document_Email_Meta:** A companion table storing email-specific metadata (deduplication keys, sender details, rejection/confirmation flags) for documents with `type = 'email'`. One-to-one with `Document`.
 - **Subscription:** A newsletter source mapped to one pseudo email address (e.g., `techweekly@read.yourdomain.com`). Documents reference their subscription via `Document.source_id`.
 - **Tag:** A user-defined label used to organize subscriptions and documents.
@@ -120,14 +120,14 @@ The original `Newsletter_Item` entity from this spec has been replaced by two ta
 1. **`Document`** — stores the universal fields (content, metadata, reading state).
 2. **`Document_Email_Meta`** — stores email-specific fields (deduplication keys, sender details, rejection/confirmation flags).
 
-Each ingested newsletter email creates one `Document` row (with `type = 'email'`, `source_type = 'subscription'`) and one `Document_Email_Meta` row linked by `document_id`.
+Each ingested newsletter email creates one `Document` row (with `type = 'email'`, `origin_type = 'subscription'`) and one `Document_Email_Meta` row linked by `document_id`.
 
 **Field mapping from the original `Newsletter_Item` to the unified model:**
 
 | Original `Newsletter_Item` field | Unified table            | Unified field         | Notes                                          |
 |----------------------------------|--------------------------|-----------------------|------------------------------------------------|
 | `id`                             | `Document`               | `id`                  |                                                |
-| `subscription_id`                | `Document`               | `source_id`           | With `source_type = 'subscription'`            |
+| `subscription_id`                | `Document`               | `source_id`           | With `origin_type = 'subscription'`            |
 | `message_id`                     | `Document_Email_Meta`    | `message_id`          |                                                |
 | `fingerprint`                    | `Document_Email_Meta`    | `fingerprint`         |                                                |
 | `subject`                        | `Document`               | `title`               |                                                |
@@ -154,7 +154,7 @@ Each ingested newsletter email creates one `Document` row (with `type = 'email'`
 - **Attachment:** Defined in [Focus Reader PRD](./focus-reader-prd.md), Section 5.1. The FK is now `document_id` (was `newsletter_item_id`).
 - **Denylist:** Defined in [Focus Reader PRD](./focus-reader-prd.md), Section 5.1. Schema is unchanged.
 - **Feed_Token:** Defined in [Focus Reader PRD](./focus-reader-prd.md), Section 5.1. Schema is unchanged.
-- **Ingestion_Log:** Defined in [Focus Reader PRD](./focus-reader-prd.md), Section 5.1. The FK is now `document_id` (was `newsletter_item_id`) and a `source_type` field has been added to distinguish email ingestion events from RSS, API, and extension events.
+- **Ingestion_Log:** Defined in [Focus Reader PRD](./focus-reader-prd.md), Section 5.1. The FK is now `document_id` (was `newsletter_item_id`) and a `channel_type` field has been added to distinguish email ingestion events from RSS, API, and extension events.
 
 #### Join Tables
 
@@ -178,10 +178,10 @@ Each ingested newsletter email creates one `Document` row (with `type = 'email'`
 - Sanitize HTML body: remove tracking pixels, external scripts, and unsafe elements. Preserve layout and images.
 - Convert sanitized HTML to Markdown.
 - If no matching subscription exists for the recipient address, auto-create one using the local part as the display name and the sender info from the email.
-- Create a `Document` record with `type = 'email'`, `source_type = 'subscription'`, and `location = 'inbox'`, linked to the subscription via `source_id`. Create a corresponding `Document_Email_Meta` record with email-specific fields (deduplication keys, sender details, headers).
-- Extract attachment metadata from MIME parts and store in the `Attachment` table (linked via `document_id`). v1 stores metadata only (no binary persistence; `storage_key` is null). Binary storage via R2 is a Phase 2 enhancement.
-- v1 does not resolve/render `cid:` inline images in the reader; such images may appear missing until binary storage or proxy support is added in a later phase.
-- Log every ingestion attempt in the `Ingestion_Log` table with `event_id`, `document_id`, `source_type = 'email'`, `received_at`, `status`, `error_code`, `error_detail`, and `attempts`.
+- Create a `Document` record with `type = 'email'`, `origin_type = 'subscription'`, and `location = 'inbox'`, linked to the subscription via `source_id`. Create a corresponding `Document_Email_Meta` record with email-specific fields (deduplication keys, sender details, headers).
+- Extract attachment metadata from MIME parts and store in the `Attachment` table (linked via `document_id`). For inline `cid:` image attachments, upload the binary to R2 (key: `attachments/{document_id}/{content_id}`), populate `storage_key`, and rewrite `cid:` references in the stored HTML to proxy URLs (`/api/attachments/{document_id}/{content_id}`). Non-inline attachments remain metadata-only in v1 (`storage_key` is null).
+- The `/api/attachments/` proxy endpoint that serves CID images from R2 is implemented in Phase 1 with the web app.
+- Log every ingestion attempt in the `Ingestion_Log` table with `event_id`, `document_id`, `channel_type = 'email'`, `received_at`, `status`, `error_code`, `error_detail`, and `attempts`.
 
 **Deduplication:**
 
@@ -212,7 +212,7 @@ Each ingested newsletter email creates one `Document` row (with `type = 'email'`
 **Edge Cases:**
 
 - Multipart emails with both HTML and plain text: prefer HTML, store both (in `Document.html_content` and `Document.plain_text_content`).
-- Emails with attachments: store attachment metadata in the `Attachment` table (linked via `document_id`). Inline images populate `content_id`; regular attachments have `content_id = null`. Rendering `cid:` inline images is out of scope for Phase 1.
+- Emails with attachments: store attachment metadata in the `Attachment` table (linked via `document_id`). Inline `cid:` images are uploaded to R2 and their HTML references rewritten to proxy URLs during ingestion; `content_id` and `storage_key` are populated. Regular attachments have `content_id = null` and `storage_key = null`.
 
 ### 5.2 Subscription Management
 

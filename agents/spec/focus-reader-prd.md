@@ -169,12 +169,14 @@ Use a **catch-all configuration on a dedicated subdomain** (e.g., `*@read.yourdo
 
 The universal content entity. Every piece of saved content — regardless of format or origin — is stored as a row in this table. Type-specific fields are nullable where not applicable.
 
-> **Clarification: `type` vs. `source_type`**
+> **Clarification: `type` vs. `origin_type`**
 >
 > - **`type`** describes *what the content is* — its format and how it is rendered. For example: `article`, `pdf`, `email`, `rss`, `bookmark`, `post`.
-> - **`source_type`** describes *how the content arrived* — the ingestion channel that created it. For example: `subscription` (came via email), `feed` (came via RSS polling), or `manual` (user saved it via URL paste, browser extension, file upload, or API call).
+> - **`origin_type`** describes *how the content arrived* — the ingestion origin that created it. For example: `subscription` (came via email), `feed` (came via RSS polling), or `manual` (user saved it via URL paste, browser extension, file upload, or API call).
 >
-> These are orthogonal. An `article` (type) could arrive from an RSS feed (source_type = `feed`) or be manually saved (source_type = `manual`). An `email` (type) always comes from a `subscription` (source_type). A `pdf` (type) is always `manual` (source_type).
+> These are orthogonal. An `article` (type) could arrive from an RSS feed (origin_type = `feed`) or be manually saved (origin_type = `manual`). An `email` (type) always comes from a `subscription` (origin_type). A `pdf` (type) is always `manual` (origin_type).
+>
+> **Note:** The `Ingestion_Log` table uses a separate field `channel_type` (`email`, `rss`, `api`, `extension`) to describe the technical channel through which the event was received. This is distinct from `origin_type` — see the [Specification Improvements](./improvements.md), Section 16, for the rationale behind this naming separation.
 
 | Field                  | Type            | Description                                                      |
 |------------------------|-----------------|------------------------------------------------------------------|
@@ -202,7 +204,7 @@ The universal content entity. Every piece of saved content — regardless of for
 | `updated_at`           | TEXT (ISO 8601) | Last update time                                                 |
 | `deleted_at`           | TEXT (ISO 8601) | Soft-delete timestamp (null when active)                         |
 | `source_id`            | TEXT (FK)       | References `subscription` or `feed` (nullable for one-off saves) |
-| `source_type`          | TEXT            | `subscription`, `feed`, or `manual`                              |
+| `origin_type`          | TEXT            | `subscription`, `feed`, or `manual`                              |
 
 #### Document_Email_Meta
 
@@ -266,6 +268,7 @@ An RSS/Atom feed the user has subscribed to. The system polls each active feed o
 | `last_fetched_at`        | TEXT (ISO 8601) | Last successful fetch                       |
 | `fetch_interval_minutes` | INTEGER         | Polling interval (default: 60)              |
 | `is_active`              | INTEGER (bool)  | Whether this feed is active                 |
+| `fetch_full_content`     | INTEGER (bool)  | Whether to fetch full article content from item URLs (default: 0). Overrides the global `default_fetch_full_content` setting when set. |
 | `auto_tag_rules`         | TEXT (JSON)     | Optional rules for auto-tagging             |
 | `error_count`            | INTEGER         | Consecutive fetch errors (reset on success) |
 | `last_error`             | TEXT            | Last fetch error message                    |
@@ -305,18 +308,19 @@ A user-selected text passage within a document, optionally annotated with a note
 
 A curated, ordered group of documents — like a reading list or playlist. Collections let the user manually organize documents into meaningful groups beyond what tags provide (e.g., "Research for Project X", "Best of 2026"). Documents can belong to multiple collections.
 
-| Field         | Type            | Description                                   |
-|---------------|-----------------|-----------------------------------------------|
-| `id`          | TEXT (UUID)     | Primary key                                   |
-| `name`        | TEXT            | Collection name                               |
-| `description` | TEXT            | Optional description                          |
-| `is_public`   | INTEGER (bool)  | Whether the collection is publicly accessible |
-| `created_at`  | TEXT (ISO 8601) | Creation time                                 |
-| `updated_at`  | TEXT (ISO 8601) | Last update time                              |
+| Field         | Type            | Description          |
+|---------------|-----------------|----------------------|
+| `id`          | TEXT (UUID)     | Primary key          |
+| `name`        | TEXT            | Collection name      |
+| `description` | TEXT            | Optional description |
+| `created_at`  | TEXT (ISO 8601) | Creation time        |
+| `updated_at`  | TEXT (ISO 8601) | Last update time     |
+
+> **Design decision:** `is_public` has been removed from v1. The security model requires all endpoints to be authenticated (Section 8.5), and public/anonymous collection sharing would conflict with this constraint. Public collections may be revisited in a future phase with an explicit token-based sharing model similar to Feed_Token. See [Specification Improvements](./improvements.md), Section 14.
 
 #### Attachment
 
-File or inline MIME part associated with a document (primarily email attachments). In v1, only metadata is stored; binary storage via R2 is a Phase 2 enhancement. For inline images in emails, the `content_id` field maps to the MIME Content-ID for future `cid:` resolution.
+File or inline MIME part associated with a document (primarily email attachments). For inline `cid:` images in emails, the binary is uploaded to R2 during ingestion (Phase 0) and the `storage_key` is populated; non-inline attachments remain metadata-only in v1 (`storage_key` is null). The `content_id` field maps to the MIME Content-ID for `cid:` URL resolution.
 
 | Field          | Type            | Description                                       |
 |----------------|-----------------|---------------------------------------------------|
@@ -326,7 +330,7 @@ File or inline MIME part associated with a document (primarily email attachments
 | `content_type` | TEXT            | MIME content type                                 |
 | `size_bytes`   | INTEGER         | Size in bytes                                     |
 | `content_id`   | TEXT            | MIME Content-ID for inline images (nullable)      |
-| `storage_key`  | TEXT            | R2 object key (nullable in v1 metadata-only mode) |
+| `storage_key`  | TEXT            | R2 object key (populated for CID inline images; nullable for non-inline attachments in v1) |
 | `created_at`   | TEXT (ISO 8601) | Creation time                                     |
 
 #### Denylist
@@ -352,6 +356,66 @@ Opaque bearer tokens used to authenticate RSS/Atom feed output endpoints (Sectio
 | `created_at` | TEXT (ISO 8601) | Creation time                         |
 | `revoked_at` | TEXT (ISO 8601) | Revocation timestamp (null if active) |
 
+#### API_Key
+
+Bearer tokens for authenticating API requests from the browser extension and external clients (Section 6.12). Stored as SHA-256 hashes; the plaintext is shown once at creation and never persisted. A short `key_prefix` (first 8 characters) is stored for user identification in the settings UI.
+
+| Field          | Type            | Description                              |
+|----------------|-----------------|------------------------------------------|
+| `id`           | TEXT (UUID)     | Primary key                              |
+| `key_hash`     | TEXT (unique)   | SHA-256 hash of the opaque API key       |
+| `key_prefix`   | TEXT            | First 8 characters of the key for display |
+| `label`        | TEXT            | User-assigned label                      |
+| `last_used_at` | TEXT (ISO 8601) | When the key was last used (nullable)    |
+| `created_at`   | TEXT (ISO 8601) | Creation time                            |
+| `revoked_at`   | TEXT (ISO 8601) | Revocation timestamp (null if active)    |
+
+#### Saved_View
+
+A persisted query-based filtered view that appears in the left sidebar (Section 6.7). Stores the filter expression as a normalized JSON AST for forward compatibility. Built-in default views (Inbox, Later, Archive, etc.) are system-defined and immutable; users can create additional custom views.
+
+| Field            | Type            | Description                                                  |
+|------------------|-----------------|--------------------------------------------------------------|
+| `id`             | TEXT (UUID)     | Primary key                                                  |
+| `name`           | TEXT            | View name                                                    |
+| `query_ast_json` | TEXT (JSON)     | Normalized filter AST (not raw user strings)                 |
+| `sort_json`      | TEXT (JSON)     | Sort configuration (field + direction)                       |
+| `is_system`      | INTEGER (bool)  | Whether this is a built-in immutable view (default: 0)       |
+| `pinned_order`   | INTEGER         | Position in the sidebar (nullable if unpinned)               |
+| `created_at`     | TEXT (ISO 8601) | Creation time                                                |
+| `updated_at`     | TEXT (ISO 8601) | Last update time                                             |
+| `deleted_at`     | TEXT (ISO 8601) | Soft-delete timestamp                                        |
+
+#### User_Preferences
+
+Single-row settings table for the v1 single-user configuration. Stores display, reading, keyboard shortcut, and per-view mode preferences. A `schema_version` field enables forward-compatible migrations when preference keys change.
+
+| Field                  | Type            | Description                                                    |
+|------------------------|-----------------|----------------------------------------------------------------|
+| `id`                   | TEXT (UUID)     | Primary key (single row in v1)                                 |
+| `schema_version`       | INTEGER         | Preference schema version for migration compatibility          |
+| `theme`                | TEXT            | `light` or `dark`                                              |
+| `font_family`          | TEXT            | Reading font family                                            |
+| `font_size`            | INTEGER         | Reading font size in pixels                                    |
+| `line_height`          | REAL            | Reading line height multiplier                                 |
+| `content_width`        | INTEGER         | Reading pane max width in pixels                               |
+| `shortcut_map_json`    | TEXT (JSON)     | Custom keyboard shortcut overrides                             |
+| `view_mode_prefs_json` | TEXT (JSON)     | Per-view display preferences (list/grid mode by view)          |
+| `updated_at`           | TEXT (ISO 8601) | Last update time                                               |
+
+#### Ingestion_Report_Daily
+
+Daily aggregate of ingestion success/failure rates, computed by a Cron Trigger. Used to render the reliability dashboard in settings (Section 6.15). Upserts by `report_date` so re-runs are idempotent.
+
+| Field           | Type            | Description                                    |
+|-----------------|-----------------|------------------------------------------------|
+| `report_date`   | TEXT (PK)       | Date in YYYY-MM-DD format                      |
+| `total_events`  | INTEGER         | Total ingestion events on this date            |
+| `success_count` | INTEGER         | Successful ingestions                           |
+| `failure_count` | INTEGER         | Failed ingestions                               |
+| `success_rate`  | REAL            | Success rate as decimal (0.0–1.0)              |
+| `computed_at`   | TEXT (ISO 8601) | When this report was last computed             |
+
 #### Ingestion_Log
 
 An audit trail of every content ingestion attempt — whether from email, RSS polling, API calls, or the browser extension. Records both successes and failures with error details. Used for the reliability dashboard and debugging ingestion issues.
@@ -361,7 +425,7 @@ An audit trail of every content ingestion attempt — whether from email, RSS po
 | `id`           | TEXT (UUID)     | Primary key                                          |
 | `event_id`     | TEXT            | Unique identifier for the inbound event              |
 | `document_id`  | TEXT (FK)       | References `document` (nullable if ingestion failed) |
-| `source_type`  | TEXT            | `email`, `rss`, `api`, `extension`                   |
+| `channel_type` | TEXT            | `email`, `rss`, `api`, `extension`                   |
 | `received_at`  | TEXT (ISO 8601) | When the event was received                          |
 | `status`       | TEXT            | `success` or `failure`                               |
 | `error_code`   | TEXT            | Error classification (nullable on success)           |
@@ -468,7 +532,7 @@ Primary key: (`collection_id`, `document_id`)
 - Convert to Markdown.
 - Compute word count and estimated reading time.
 - Extract Open Graph / meta tag metadata as fallback for title, description, and cover image.
-- Create a `Document` record with `type = 'article'`, `source_type = 'manual'`, and `location = 'inbox'`.
+- Create a `Document` record with `type = 'article'`, `origin_type = 'manual'`, and `location = 'inbox'`.
 
 **Deduplication:**
 
@@ -495,7 +559,7 @@ Primary key: (`collection_id`, `document_id`)
 **Error handling:**
 
 - Track consecutive fetch errors in `error_count`. After 5 consecutive failures, mark the feed as inactive and notify the user.
-- Log fetch attempts in `Ingestion_Log` with `source_type = 'rss'`.
+- Log fetch attempts in `Ingestion_Log` with `channel_type = 'rss'`.
 
 #### 6.1.4 PDF Upload and Saving
 
@@ -861,7 +925,8 @@ Every API request must be authenticated. There are no unauthenticated endpoints 
 
 - Cloudflare Email Worker configured with catch-all on subdomain.
 - Worker parses inbound email, sanitizes HTML, converts to Markdown, and writes to D1.
-- D1 schema for `Document`, `Document_Email_Meta`, `Subscription`, `Tag`, `Ingestion_Log`.
+- D1 schema: all tables created upfront (Document, Document_Email_Meta, Subscription, Tag, Attachment, Denylist, Ingestion_Log, Feed, Highlight, Collection, Document_PDF_Meta, Feed_Token, API_Key, Saved_View, User_Preferences, Ingestion_Report_Daily, and all join tables). Only email-related tables are actively used in Phase 0; others are created empty to avoid mid-flight migrations.
+- Inline `cid:` images from email newsletters uploaded to R2 during ingestion, HTML references rewritten to proxy URLs.
 - No UI — verify via database inspection or API call.
 - Subscribe to 2–3 real newsletters and confirm receipt and parsing.
 
