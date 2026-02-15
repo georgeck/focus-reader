@@ -20,6 +20,10 @@ type Status =
   | "saving"
   | "error";
 
+type PopupTab = "page" | "saved";
+type PopupTheme = "light" | "dark" | "system";
+type DefaultSaveType = "article" | "bookmark";
+
 function isHttpUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
@@ -29,8 +33,36 @@ function isHttpUrl(url: string): boolean {
   }
 }
 
+function domainFromUrl(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+}
+
+function relativeTime(iso?: string): string {
+  if (!iso) return "";
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const minutes = Math.floor(diffMs / 60_000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  const months = Math.floor(days / 30);
+  return `${months}mo ago`;
+}
+
+function resolveTheme(theme: PopupTheme, prefersDark: boolean): "light" | "dark" {
+  if (theme === "system") return prefersDark ? "dark" : "light";
+  return theme;
+}
+
 export function App() {
   const [status, setStatus] = useState<Status>("loading");
+  const [activeTab, setActiveTab] = useState<PopupTab>("page");
   const [error, setError] = useState("");
   const [pageUrl, setPageUrl] = useState("");
   const [pageTitle, setPageTitle] = useState("");
@@ -43,10 +75,44 @@ export function App() {
   const [actionInProgress, setActionInProgress] = useState(false);
   const [captureFailed, setCaptureFailed] = useState(false);
 
+  const [showSettings, setShowSettings] = useState(false);
+  const [theme, setTheme] = useState<PopupTheme>("system");
+  const [defaultSaveType, setDefaultSaveType] = useState<DefaultSaveType>("article");
+  const [settingsApiUrl, setSettingsApiUrl] = useState("");
+  const [savingSettings, setSavingSettings] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const stored = await browser.storage.sync.get(["theme", "defaultSaveType", "apiUrl"]);
+      const storedTheme = stored.theme;
+      const storedSaveType = stored.defaultSaveType;
+      if (storedTheme === "light" || storedTheme === "dark" || storedTheme === "system") {
+        setTheme(storedTheme);
+      }
+      if (storedSaveType === "article" || storedSaveType === "bookmark") {
+        setDefaultSaveType(storedSaveType);
+      }
+      if (typeof stored.apiUrl === "string") {
+        setSettingsApiUrl(stored.apiUrl);
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const apply = () => {
+      document.documentElement.dataset.theme = resolveTheme(theme, media.matches);
+    };
+    apply();
+    media.addEventListener("change", apply);
+    return () => media.removeEventListener("change", apply);
+  }, [theme]);
+
   const loadPageState = useCallback(async () => {
     setStatus("loading");
     setError("");
     setCaptureFailed(false);
+    setConfirmDelete(false);
     try {
       const config = await getConfig();
       if (!config) {
@@ -59,34 +125,30 @@ export function App() {
       if (tab?.title) setPageTitle(tab.title);
 
       if (!tab?.url) {
+        setDoc(null);
         setStatus("not-saved");
         return;
       }
 
       if (!isHttpUrl(tab.url)) {
+        setDoc(null);
         setError("Only HTTP/HTTPS pages can be saved.");
         setStatus("not-saved");
         return;
       }
 
-      try {
-        const result = await sendMessage("getPageStatus", { url: tab.url });
-        if (result) {
-          setDoc(result);
-          setStatus("saved");
-        } else {
-          setStatus("not-saved");
-        }
-      } catch (err) {
-        setError(
-          err instanceof Error
-            ? err.message
-            : "Failed to check if this page is already saved."
-        );
-        setStatus("error");
+      const result = await sendMessage("getPageStatus", { url: tab.url });
+      if (result) {
+        setDoc(result);
+        setStatus("saved");
+      } else {
+        setDoc(null);
+        setStatus("not-saved");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load page state.");
+      setError(
+        err instanceof Error ? err.message : "Failed to check if this page is already saved."
+      );
       setStatus("error");
     }
   }, []);
@@ -120,17 +182,13 @@ export function App() {
       if (type === "article") {
         try {
           const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
-          if (tab?.id) {
-            html = await sendMessage("captureHtml", undefined, tab.id);
-          }
+          if (tab?.id) html = await sendMessage("captureHtml", undefined, tab.id);
         } catch {
           // Content script unavailable
         }
 
         if (!html) {
-          setError(
-            "Couldn't capture full article content for this page. Save as bookmark instead."
-          );
+          setError("Couldn't capture full article content for this page. Save as bookmark instead.");
           setCaptureFailed(true);
           setStatus("not-saved");
           return;
@@ -142,29 +200,30 @@ export function App() {
           type,
           tagIds: selectedTagIds.length > 0 ? selectedTagIds : undefined,
         });
-        // Invalidate cache so badge updates
+
         sendMessage("invalidatePageStatus", { url: pageUrl }).catch(() => {});
-        // Try to fetch full detail; fall back to save response
+
         try {
           const result = await sendMessage("getPageStatus", { url: pageUrl });
           if (result) {
             setDoc(result);
+            setActiveTab("saved");
             setStatus("saved");
             return;
           }
         } catch {
-          // Lookup failed — use save response as fallback
+          // Fall through to response fallback
         }
-        // Fallback: use the response from savePage
+
         const fallback = saved as DocumentDetail;
         if (fallback?.id) {
           setDoc({ ...fallback, tags: fallback.tags ?? [] });
+          setActiveTab("saved");
           setStatus("saved");
         } else {
-          setStatus("saved");
           setDoc({
             id: "",
-            type: type,
+            type,
             url: pageUrl,
             title: pageTitle || pageUrl,
             author: null,
@@ -178,6 +237,8 @@ export function App() {
             saved_at: new Date().toISOString(),
             tags: [],
           });
+          setActiveTab("saved");
+          setStatus("saved");
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Save failed");
@@ -211,7 +272,7 @@ export function App() {
   );
 
   const handleDelete = useCallback(async () => {
-    if (!doc) return;
+    if (!doc?.id) return;
     setActionInProgress(true);
     try {
       await deleteDocument(doc.id);
@@ -219,6 +280,7 @@ export function App() {
       setDoc(null);
       setStatus("not-saved");
       setConfirmDelete(false);
+      setActiveTab("page");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Delete failed");
     } finally {
@@ -228,7 +290,7 @@ export function App() {
 
   const handleAddToCollection = useCallback(
     async (collectionId: string) => {
-      if (!doc) return;
+      if (!doc?.id) return;
       await handleAction(async () => {
         await addToCollection(collectionId, doc.id);
       });
@@ -239,7 +301,7 @@ export function App() {
 
   const loadCollections = useCallback(async () => {
     if (collections.length > 0) {
-      setShowCollections(!showCollections);
+      setShowCollections((prev) => !prev);
       return;
     }
     try {
@@ -247,280 +309,377 @@ export function App() {
       setCollections(result);
       setShowCollections(true);
     } catch {
-      setError("Failed to load collections");
+      setError("Failed to load collections.");
     }
-  }, [collections, showCollections]);
+  }, [collections.length]);
 
-  const btn =
-    "px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors disabled:opacity-40";
-  const btnDefault = `${btn} border-gray-200 bg-white hover:bg-gray-50 active:bg-gray-100`;
-  const btnPrimary =
-    "flex-1 px-3 py-2.5 text-sm font-medium rounded-lg transition-colors disabled:opacity-40";
+  const saveQuickSettings = useCallback(async () => {
+    setSavingSettings(true);
+    try {
+      const cleanApiUrl = settingsApiUrl.trim().replace(/\/$/, "");
+      await browser.storage.sync.set({
+        theme,
+        defaultSaveType,
+        apiUrl: cleanApiUrl,
+      });
+      setShowSettings(false);
+      await loadPageState();
+    } finally {
+      setSavingSettings(false);
+    }
+  }, [defaultSaveType, loadPageState, settingsApiUrl, theme]);
 
-  // --- Not configured ---
-  if (status === "not-configured") {
-    return (
-      <div className="w-[400px] p-5">
-        <h2 className="text-[15px] font-semibold mb-3">Focus Reader</h2>
-        <p className="text-sm text-gray-500 mb-4">Extension not configured.</p>
-        <button
-          className="w-full px-3 py-2.5 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800"
-          onClick={() => browser.runtime.openOptionsPage()}
-        >
-          Open Settings
-        </button>
-      </div>
-    );
-  }
-
-  // --- Loading ---
-  if (status === "loading") {
-    return (
-      <div className="w-[400px] p-5">
-        <h2 className="text-[15px] font-semibold mb-4">Focus Reader</h2>
-        <div className="space-y-2.5 animate-pulse">
-          <div className="h-4 bg-gray-100 rounded-md w-3/4" />
-          <div className="h-3 bg-gray-100 rounded-md w-1/2" />
-          <div className="flex gap-2 mt-4">
-            <div className="h-10 bg-gray-100 rounded-lg flex-1" />
-            <div className="h-10 bg-gray-100 rounded-lg flex-1" />
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // --- Error (standalone) ---
-  if (status === "error" && !doc) {
-    return (
-      <div className="w-[400px] p-5">
-        <h2 className="text-[15px] font-semibold mb-3">Focus Reader</h2>
-        <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2.5 mb-3">{error}</p>
-        <button
-          className="w-full px-3 py-2.5 text-sm font-medium rounded-lg border border-gray-200 bg-white hover:bg-gray-50"
-          onClick={() => loadPageState()}
-        >
-          Retry
-        </button>
-      </div>
-    );
-  }
-
-  // --- Saved state ---
-  if (status === "saved" && doc) {
-    return (
-      <div className="w-[400px] p-5">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-[15px] font-semibold">Focus Reader</h2>
-          <span className="text-[10px] font-medium uppercase tracking-wide text-green-700 bg-green-50 px-2 py-0.5 rounded-full">
-            Saved
-          </span>
-        </div>
-
-        {/* Page card */}
-        <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-100">
-          <p className="text-sm font-medium leading-snug line-clamp-2" title={pageUrl}>
-            {doc.title || pageTitle || pageUrl}
-          </p>
-          <div className="flex items-center gap-1.5 mt-1.5 text-[11px] text-gray-500">
-            <span className="capitalize">{doc.type}</span>
-            <span className="text-gray-300">/</span>
-            <span className="capitalize">{doc.location}</span>
-            {doc.is_read ? (
-              <>
-                <span className="text-gray-300">/</span>
-                <span>Read</span>
-              </>
-            ) : null}
-            {doc.is_starred ? (
-              <>
-                <span className="text-gray-300">/</span>
-                <span className="text-amber-600">Starred</span>
-              </>
-            ) : null}
-          </div>
-          {doc.tags.length > 0 && (
-            <div className="flex flex-wrap gap-1 mt-2">
-              {doc.tags.map((tag) => (
-                <span
-                  key={tag.id}
-                  className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 bg-white rounded-md border border-gray-200"
-                >
-                  <span
-                    className="w-2 h-2 rounded-full shrink-0"
-                    style={{ backgroundColor: tag.color ?? "#888" }}
-                  />
-                  {tag.name}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {error && (
-          <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2 mb-3">{error}</p>
-        )}
-
-        {/* Triage actions */}
-        <div className="grid grid-cols-2 gap-1.5 mb-3">
-          <button
-            disabled={actionInProgress}
-            className={btnDefault}
-            onClick={() =>
-              handleAction(() =>
-                updateDocument(doc.id, { is_starred: doc.is_starred ? 0 : 1 })
-              )
-            }
-          >
-            {doc.is_starred ? "Unstar" : "Star"}
-          </button>
-          <button
-            disabled={actionInProgress}
-            className={btnDefault}
-            onClick={() =>
-              handleAction(() =>
-                updateDocument(doc.id, { is_read: doc.is_read ? 0 : 1 })
-              )
-            }
-          >
-            {doc.is_read ? "Mark unread" : "Mark read"}
-          </button>
-          <button
-            disabled={actionInProgress}
-            className={btnDefault}
-            onClick={() =>
-              handleAction(() =>
-                updateDocument(doc.id, { location: "archive" })
-              )
-            }
-          >
-            Archive
-          </button>
-          <button
-            disabled={actionInProgress}
-            className={btnDefault}
-            onClick={loadCollections}
-          >
-            Add to collection
-          </button>
-        </div>
-
-        {/* Collection picker */}
-        {showCollections && (
-          <div className="mb-3 max-h-32 overflow-y-auto border border-gray-200 rounded-lg">
-            {collections.length === 0 ? (
-              <p className="text-xs text-gray-400 p-3">No collections</p>
-            ) : (
-              collections.map((col) => (
-                <button
-                  key={col.id}
-                  disabled={actionInProgress}
-                  className="w-full text-left px-3 py-2 text-xs font-medium hover:bg-gray-50 disabled:opacity-40 border-b border-gray-100 last:border-0"
-                  onClick={() => handleAddToCollection(col.id)}
-                >
-                  {col.name}
-                </button>
-              ))
-            )}
-          </div>
-        )}
-
-        {/* Delete + Open */}
-        <div className="flex gap-2 pt-2 border-t border-gray-100">
-          {confirmDelete ? (
-            <>
-              <button
-                disabled={actionInProgress}
-                className="flex-1 px-3 py-2 text-xs font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-40"
-                onClick={handleDelete}
-              >
-                Confirm delete
-              </button>
-              <button
-                className="flex-1 px-3 py-2 text-xs font-medium border border-gray-200 rounded-lg hover:bg-gray-50"
-                onClick={() => setConfirmDelete(false)}
-              >
-                Cancel
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                disabled={actionInProgress}
-                className="flex-1 px-3 py-2 text-xs font-medium text-red-600 border border-gray-200 rounded-lg hover:bg-red-50 disabled:opacity-40"
-                onClick={() => setConfirmDelete(true)}
-              >
-                Delete
-              </button>
-              <button
-                className="flex-1 px-3 py-2 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
-                onClick={async () => {
-                  const config = await getConfig();
-                  if (config) {
-                    window.open(
-                      `${config.apiUrl.replace(/\/$/, "")}/inbox?doc=${doc.id}`,
-                      "_blank"
-                    );
-                  }
-                }}
-              >
-                Open in Reader
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  // --- Not saved / saving ---
   const canSavePage = isHttpUrl(pageUrl);
+  const pageDomain = domainFromUrl(pageUrl);
+  const isSaved = status === "saved" && !!doc;
+
+  const primarySaveType = defaultSaveType;
+  const secondarySaveType = defaultSaveType === "article" ? "bookmark" : "article";
+  const primaryLabel = primarySaveType === "article" ? "Save as Article" : "Save as Bookmark";
+  const secondaryLabel =
+    secondarySaveType === "article" ? "Save as Article" : "Save as Bookmark";
 
   return (
-    <div className="w-[400px] p-5">
-      <h2 className="text-[15px] font-semibold mb-1">Focus Reader</h2>
-
-      <p className="text-sm text-gray-500 truncate mb-4" title={pageUrl}>
-        {pageTitle || pageUrl}
-      </p>
-
-      {error && (
-        <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2.5 mb-3">{error}</p>
-      )}
-
-      {captureFailed && canSavePage && status !== "saving" && (
+    <div className="relative w-[400px] min-h-[520px] bg-[var(--bg-primary)] text-[var(--text-primary)]">
+      <header className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)] bg-[var(--bg-secondary)]">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-semibold tracking-tight">Focus Reader</span>
+          {isSaved ? (
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400">
+              Saved
+            </span>
+          ) : null}
+        </div>
         <button
-          className="w-full mb-3 px-3 py-2 text-xs font-medium rounded-lg border border-gray-200 bg-white hover:bg-gray-50"
-          onClick={() => handleSave("bookmark")}
+          className="text-xs px-2 py-1 rounded-md border border-[var(--border)] bg-[var(--bg-card)] hover:bg-[var(--bg-hover)]"
+          onClick={() => setShowSettings(true)}
+          title="Quick settings"
         >
-          Save as Bookmark Instead
+          Settings
         </button>
-      )}
+      </header>
 
-      <div className="flex gap-2 mb-3">
-        <button
-          disabled={status === "saving" || !canSavePage}
-          className={`${btnPrimary} bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800`}
-          onClick={() => handleSave("article")}
-        >
-          {status === "saving" ? "Saving..." : "Save as Article"}
-        </button>
-        <button
-          disabled={status === "saving" || !canSavePage}
-          className={`${btnPrimary} bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 active:bg-gray-100`}
-          onClick={() => handleSave("bookmark")}
-        >
-          Save as Bookmark
-        </button>
+      <div className="px-4 pt-3">
+        <div className="grid grid-cols-2 gap-1 p-1 bg-[var(--bg-secondary)] rounded-lg border border-[var(--border)]">
+          <button
+            className={`text-xs py-1.5 rounded-md transition-colors ${
+              activeTab === "page"
+                ? "bg-[var(--accent)] text-white"
+                : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+            }`}
+            onClick={() => setActiveTab("page")}
+          >
+            Page
+          </button>
+          <button
+            className={`text-xs py-1.5 rounded-md transition-colors ${
+              activeTab === "saved"
+                ? "bg-[var(--accent)] text-white"
+                : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+            }`}
+            onClick={() => setActiveTab("saved")}
+          >
+            Saved
+          </button>
+        </div>
       </div>
 
-      <button
-        className="w-full text-center text-xs text-gray-400 py-1 hover:text-gray-600 transition-colors"
-        onClick={() => setShowTags(!showTags)}
-      >
-        {showTags ? "Hide Tags" : "Add Tags"}
-      </button>
-      {showTags && <TagPicker selectedIds={selectedTagIds} onToggle={handleToggleTag} />}
+      <div className="p-4">
+        <div className="p-3 rounded-xl border border-[var(--border)] bg-[var(--bg-card)] mb-3">
+          <p className="text-sm font-medium leading-snug line-clamp-2">{pageTitle || pageUrl}</p>
+          <div className="mt-1.5 text-[11px] text-[var(--text-tertiary)] flex items-center gap-1.5">
+            <span className="truncate">{pageDomain}</span>
+            {doc?.saved_at ? (
+              <>
+                <span>·</span>
+                <span>Saved {relativeTime(doc.saved_at)}</span>
+              </>
+            ) : (
+              <>
+                <span>·</span>
+                <span>Not saved</span>
+              </>
+            )}
+          </div>
+        </div>
+
+        {error ? (
+          <p className="text-xs text-red-300 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2 mb-3">
+            {error}
+          </p>
+        ) : null}
+
+        {status === "loading" ? (
+          <div className="space-y-2.5 animate-pulse">
+            <div className="h-9 bg-[var(--bg-secondary)] rounded-lg" />
+            <div className="h-9 bg-[var(--bg-secondary)] rounded-lg" />
+            <div className="h-16 bg-[var(--bg-secondary)] rounded-lg" />
+          </div>
+        ) : activeTab === "page" ? (
+          <>
+            {status === "not-configured" ? (
+              <div className="space-y-2">
+                <p className="text-sm text-[var(--text-secondary)]">
+                  Extension is not configured. Set API URL and API key first.
+                </p>
+                <button
+                  className="w-full px-3 py-2 text-sm rounded-lg bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)]"
+                  onClick={() => browser.runtime.openOptionsPage()}
+                >
+                  Open Full Settings
+                </button>
+              </div>
+            ) : !canSavePage ? (
+              <p className="text-sm text-[var(--text-secondary)]">
+                This page cannot be saved. Switch to an HTTP/HTTPS page.
+              </p>
+            ) : (
+              <>
+                {captureFailed && status !== "saving" ? (
+                  <button
+                    className="w-full mb-2 px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-[var(--bg-card)] hover:bg-[var(--bg-hover)]"
+                    onClick={() => handleSave("bookmark")}
+                  >
+                    Save as Bookmark Instead
+                  </button>
+                ) : null}
+                <div className="space-y-2">
+                  <button
+                    disabled={status === "saving"}
+                    className="w-full px-3 py-2.5 text-sm rounded-lg bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] disabled:opacity-50"
+                    onClick={() => handleSave(primarySaveType)}
+                  >
+                    {status === "saving" ? "Saving..." : primaryLabel}
+                  </button>
+                  <button
+                    disabled={status === "saving"}
+                    className="w-full px-3 py-2.5 text-sm rounded-lg border border-[var(--border)] bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] disabled:opacity-50"
+                    onClick={() => handleSave(secondarySaveType)}
+                  >
+                    {secondaryLabel}
+                  </button>
+                </div>
+                <button
+                  className="mt-3 w-full text-center text-xs text-[var(--text-tertiary)] hover:text-[var(--text-primary)]"
+                  onClick={() => setShowTags((prev) => !prev)}
+                >
+                  {showTags ? "Hide tags" : "Add tags"}
+                </button>
+                {showTags ? (
+                  <div className="mt-2 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2">
+                    <TagPicker selectedIds={selectedTagIds} onToggle={handleToggleTag} />
+                  </div>
+                ) : null}
+              </>
+            )}
+          </>
+        ) : isSaved && doc ? (
+          <>
+            <div className="grid grid-cols-2 gap-2 mb-2">
+              <button
+                disabled={actionInProgress}
+                className="px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] disabled:opacity-50"
+                onClick={() =>
+                  handleAction(() => updateDocument(doc.id, { is_starred: doc.is_starred ? 0 : 1 }))
+                }
+              >
+                {doc.is_starred ? "Unstar" : "Star"}
+              </button>
+              <button
+                disabled={actionInProgress}
+                className="px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] disabled:opacity-50"
+                onClick={() =>
+                  handleAction(() => updateDocument(doc.id, { is_read: doc.is_read ? 0 : 1 }))
+                }
+              >
+                {doc.is_read ? "Mark unread" : "Mark read"}
+              </button>
+              <button
+                disabled={actionInProgress}
+                className="px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] disabled:opacity-50"
+                onClick={() =>
+                  handleAction(() =>
+                    updateDocument(doc.id, { location: doc.location === "archive" ? "inbox" : "archive" })
+                  )
+                }
+              >
+                {doc.location === "archive" ? "Move to inbox" : "Archive"}
+              </button>
+              <button
+                disabled={actionInProgress}
+                className="px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] disabled:opacity-50"
+                onClick={loadCollections}
+              >
+                Add to collection
+              </button>
+            </div>
+
+            {showCollections ? (
+              <div className="mb-3 max-h-32 overflow-y-auto rounded-lg border border-[var(--border)]">
+                {collections.length === 0 ? (
+                  <p className="text-xs text-[var(--text-tertiary)] p-3">No collections found.</p>
+                ) : (
+                  collections.map((col) => (
+                    <button
+                      key={col.id}
+                      disabled={actionInProgress}
+                      className="w-full text-left px-3 py-2 text-xs hover:bg-[var(--bg-hover)] border-b border-[var(--border)] last:border-0 disabled:opacity-50"
+                      onClick={() => handleAddToCollection(col.id)}
+                    >
+                      {col.name}
+                    </button>
+                  ))
+                )}
+              </div>
+            ) : null}
+
+            <div className="flex gap-2 pt-2 border-t border-[var(--border)]">
+              {confirmDelete ? (
+                <>
+                  <button
+                    disabled={actionInProgress}
+                    className="flex-1 px-3 py-2 text-xs rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+                    onClick={handleDelete}
+                  >
+                    Confirm delete
+                  </button>
+                  <button
+                    className="flex-1 px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-[var(--bg-card)] hover:bg-[var(--bg-hover)]"
+                    onClick={() => setConfirmDelete(false)}
+                  >
+                    Cancel
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    disabled={actionInProgress}
+                    className="flex-1 px-3 py-2 text-xs rounded-lg border border-[var(--border)] text-red-300 bg-[var(--bg-card)] hover:bg-red-500/10 disabled:opacity-50"
+                    onClick={() => setConfirmDelete(true)}
+                  >
+                    Delete
+                  </button>
+                  <button
+                    className="flex-1 px-3 py-2 text-xs rounded-lg bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)]"
+                    onClick={async () => {
+                      const config = await getConfig();
+                      if (!config) return;
+                      const locationPath =
+                        doc.location === "later"
+                          ? "later"
+                          : doc.location === "archive"
+                            ? "archive"
+                            : "inbox";
+                      window.open(
+                        `${config.apiUrl.replace(/\/$/, "")}/${locationPath}?doc=${doc.id}`,
+                        "_blank"
+                      );
+                    }}
+                  >
+                    Open in Reader
+                  </button>
+                </>
+              )}
+            </div>
+          </>
+        ) : (
+          <div className="text-center py-4">
+            <p className="text-sm font-medium mb-1">This page is not saved yet</p>
+            <p className="text-xs text-[var(--text-tertiary)] mb-3">
+              Save it first, then manage it from the Saved tab.
+            </p>
+            <button
+              className="px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-[var(--bg-card)] hover:bg-[var(--bg-hover)]"
+              onClick={() => setActiveTab("page")}
+            >
+              Go to Page tab
+            </button>
+          </div>
+        )}
+      </div>
+
+      {showSettings ? (
+        <div className="absolute inset-0 z-20 bg-[var(--bg-primary)] flex flex-col">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
+            <h3 className="text-sm font-semibold">Quick Settings</h3>
+            <button
+              className="text-xs px-2 py-1 rounded-md border border-[var(--border)] bg-[var(--bg-card)] hover:bg-[var(--bg-hover)]"
+              onClick={() => setShowSettings(false)}
+            >
+              Close
+            </button>
+          </div>
+          <div className="p-4 space-y-4 flex-1 overflow-y-auto">
+            <div>
+              <label className="block text-xs text-[var(--text-secondary)] mb-1">API URL</label>
+              <input
+                value={settingsApiUrl}
+                onChange={(e) => setSettingsApiUrl(e.target.value)}
+                className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--border)] bg-[var(--bg-card)] focus:outline-none focus:border-[var(--accent)]"
+                placeholder="https://your-focus-reader.example.com"
+              />
+              <p className="text-[11px] text-[var(--text-tertiary)] mt-1">
+                API key stays managed in the full settings page.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-xs text-[var(--text-secondary)] mb-1">Theme</label>
+              <div className="grid grid-cols-3 gap-2">
+                {(["system", "light", "dark"] as PopupTheme[]).map((item) => (
+                  <button
+                    key={item}
+                    className={`px-2 py-2 text-xs rounded-lg border ${
+                      theme === item
+                        ? "border-[var(--accent)] bg-[var(--accent)] text-white"
+                        : "border-[var(--border)] bg-[var(--bg-card)] hover:bg-[var(--bg-hover)]"
+                    }`}
+                    onClick={() => setTheme(item)}
+                  >
+                    {item.charAt(0).toUpperCase() + item.slice(1)}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs text-[var(--text-secondary)] mb-1">
+                Default save button
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {(["article", "bookmark"] as DefaultSaveType[]).map((item) => (
+                  <button
+                    key={item}
+                    className={`px-2 py-2 text-xs rounded-lg border ${
+                      defaultSaveType === item
+                        ? "border-[var(--accent)] bg-[var(--accent)] text-white"
+                        : "border-[var(--border)] bg-[var(--bg-card)] hover:bg-[var(--bg-hover)]"
+                    }`}
+                    onClick={() => setDefaultSaveType(item)}
+                  >
+                    {item === "article" ? "Article" : "Bookmark"}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <button
+              className="w-full px-3 py-2 text-sm rounded-lg bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] disabled:opacity-50"
+              onClick={saveQuickSettings}
+              disabled={savingSettings}
+            >
+              {savingSettings ? "Saving..." : "Save quick settings"}
+            </button>
+
+            <button
+              className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--border)] bg-[var(--bg-card)] hover:bg-[var(--bg-hover)]"
+              onClick={() => browser.runtime.openOptionsPage()}
+            >
+              Open full settings
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
