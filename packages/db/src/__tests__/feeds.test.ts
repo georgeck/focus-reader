@@ -303,6 +303,25 @@ describe("feed queries", () => {
       expect(due).toHaveLength(0);
     });
 
+    it("includes feeds past their interval", async () => {
+      const feed = await createFeed(env.FOCUS_DB, {
+        feed_url: "https://example.com/overdue.xml",
+        title: "Overdue Feed",
+        fetch_interval_minutes: 60,
+      });
+
+      // Set last_fetched_at to 2 hours ago (past the 60-minute interval)
+      const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+      await env.FOCUS_DB
+        .prepare("UPDATE feed SET last_fetched_at = ?1 WHERE id = ?2")
+        .bind(twoHoursAgo, feed.id)
+        .run();
+
+      const due = await getFeedsDueForPoll(env.FOCUS_DB);
+      expect(due).toHaveLength(1);
+      expect(due[0].title).toBe("Overdue Feed");
+    });
+
     it("excludes inactive feeds", async () => {
       const feed = await createFeed(env.FOCUS_DB, {
         feed_url: "https://example.com/inactive.xml",

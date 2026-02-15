@@ -197,7 +197,7 @@ export async function getFeedsDueForPoll(
       `SELECT * FROM feed
        WHERE is_active = 1
          AND deleted_at IS NULL
-         AND (last_fetched_at IS NULL OR last_fetched_at < datetime('now', '-' || fetch_interval_minutes || ' minutes'))`
+         AND (last_fetched_at IS NULL OR datetime(last_fetched_at) < datetime('now', '-' || fetch_interval_minutes || ' minutes'))`
     )
     .all<Feed>();
   return rows.results;
