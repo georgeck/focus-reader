@@ -15,12 +15,14 @@ import {
   Plus,
   PanelLeftClose,
   PanelLeftOpen,
+  Filter,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { useSubscriptions } from "@/hooks/use-subscriptions";
 import { useFeeds } from "@/hooks/use-feeds";
 import { useTags } from "@/hooks/use-tags";
+import { useSavedViews } from "@/hooks/use-saved-views";
 import { useApp } from "@/contexts/app-context";
 import { Button } from "@/components/ui/button";
 import { AddBookmarkDialog } from "@/components/dialogs/add-bookmark-dialog";
@@ -39,9 +41,11 @@ export function NavSidebar() {
   const { subscriptions } = useSubscriptions();
   const { feeds } = useFeeds();
   const { tags } = useTags();
+  const { views } = useSavedViews();
   const [subsOpen, setSubsOpen] = useState(true);
   const [feedsOpen, setFeedsOpen] = useState(true);
   const [tagsOpen, setTagsOpen] = useState(true);
+  const [viewsOpen, setViewsOpen] = useState(true);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
 
   if (sidebarCollapsed) return null;
@@ -201,6 +205,41 @@ export function NavSidebar() {
                   </span>
                 </Link>
               ))}
+            </div>
+          )}
+        </div>
+
+        {/* Saved Views */}
+        <div className="mt-4">
+          <button
+            onClick={() => setViewsOpen(!viewsOpen)}
+            className="flex w-full items-center justify-between px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground"
+          >
+            <span>Saved Views</span>
+            {viewsOpen ? (
+              <ChevronDown className="size-3.5" />
+            ) : (
+              <ChevronRight className="size-3.5" />
+            )}
+          </button>
+          {viewsOpen && (
+            <div className="space-y-0.5">
+              {views
+                .filter((v) => v.pinned_order !== null)
+                .map((view) => (
+                  <Link
+                    key={view.id}
+                    href={`/views/${view.id}`}
+                    className={cn(
+                      "flex items-center gap-3 rounded-md px-3 py-1.5 text-sm transition-colors hover:bg-sidebar-accent",
+                      pathname === `/views/${view.id}` &&
+                        "bg-sidebar-accent font-medium"
+                    )}
+                  >
+                    <Filter className="size-4 flex-shrink-0 text-muted-foreground" />
+                    <span className="flex-1 truncate">{view.name}</span>
+                  </Link>
+                ))}
             </div>
           )}
         </div>

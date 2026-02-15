@@ -9,3 +9,5 @@ export * from "./queries/denylist.js";
 export * from "./queries/attachments.js";
 export * from "./queries/search.js";
 export * from "./queries/api-keys.js";
+export * from "./queries/pdf-meta.js";
+export * from "./queries/saved-views.js";

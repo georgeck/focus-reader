@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { getDocumentDetail } from "@focus-reader/api";
-import { getDb } from "@/lib/bindings";
+import { getPdfMeta } from "@focus-reader/db";
+import { getDb, getR2 } from "@/lib/bindings";
 import { json, jsonError } from "@/lib/api-helpers";
 import { withAuth } from "@/lib/auth-middleware";
 
@@ -16,6 +17,25 @@ export async function GET(
       if (!doc) {
         return jsonError("Document not found", "NOT_FOUND", 404);
       }
+
+      if (doc.type === "pdf") {
+        const pdfMeta = await getPdfMeta(db, doc.id);
+        if (!pdfMeta) {
+          return jsonError("PDF metadata not found", "NOT_FOUND", 404);
+        }
+        const r2 = await getR2();
+        const obj = await r2.get(pdfMeta.storage_key);
+        if (!obj) {
+          return jsonError("PDF file not found", "NOT_FOUND", 404);
+        }
+        return new Response(obj.body, {
+          headers: {
+            "Content-Type": "application/pdf",
+            "Content-Disposition": `inline; filename="${doc.title}.pdf"`,
+          },
+        });
+      }
+
       return json({
         htmlContent: doc.html_content,
         markdownContent: doc.markdown_content,

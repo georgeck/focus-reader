@@ -5,3 +5,4 @@ export * from "./metadata.js";
 export * from "./attachments.js";
 export * from "./email/index.js";
 export * from "./rss/index.js";
+export * from "./pdf.js";

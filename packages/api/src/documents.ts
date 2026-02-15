@@ -13,8 +13,9 @@ import {
   softDeleteDocument,
   createDocument,
   getDocumentByUrl,
+  createPdfMeta,
 } from "@focus-reader/db";
-import { extractArticle, extractMetadata } from "@focus-reader/parser";
+import { extractArticle, extractMetadata, extractPdfMetadata } from "@focus-reader/parser";
 
 export async function getDocuments(
   db: D1Database,
@@ -136,6 +137,43 @@ export async function createBookmark(
     title: url,
     origin_type: "manual",
   });
+  return doc;
+}
+
+export async function createPdfDocument(
+  db: D1Database,
+  r2: R2Bucket,
+  file: ArrayBuffer,
+  filename: string
+): Promise<Document> {
+  const docId = crypto.randomUUID();
+  const storageKey = `pdfs/${docId}/${filename}`;
+
+  // Upload to R2
+  await r2.put(storageKey, file, {
+    httpMetadata: { contentType: "application/pdf" },
+  });
+
+  // Extract metadata
+  const metadata = extractPdfMetadata(file, filename);
+
+  // Create document
+  const doc = await createDocument(db, {
+    id: docId,
+    type: "pdf",
+    title: metadata.title ?? filename,
+    origin_type: "manual",
+    location: "inbox",
+  });
+
+  // Create PDF metadata
+  await createPdfMeta(db, {
+    document_id: docId,
+    page_count: metadata.pageCount,
+    file_size_bytes: metadata.fileSizeBytes,
+    storage_key: storageKey,
+  });
+
   return doc;
 }
 

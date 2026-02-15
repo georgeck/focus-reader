@@ -6,3 +6,4 @@ export * from "./denylist.js";
 export * from "./auth.js";
 export * from "./search.js";
 export * from "./api-keys.js";
+export * from "./saved-views.js";

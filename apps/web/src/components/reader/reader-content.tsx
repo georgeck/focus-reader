@@ -7,6 +7,7 @@ import { apiFetch } from "@/lib/api-client";
 import { formatDate } from "@/lib/format";
 import { extractDomain } from "@focus-reader/shared";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PdfViewer } from "./pdf-viewer";
 
 interface ReaderContentProps {
   documentId: string;
@@ -76,6 +77,10 @@ export function ReaderContent({ documentId }: ReaderContentProps) {
         </div>
       </div>
     );
+  }
+
+  if (doc.type === "pdf") {
+    return <PdfViewer documentId={documentId} />;
   }
 
   const domain = doc.url ? extractDomain(doc.url) : doc.site_name;

@@ -311,6 +311,13 @@ export interface CreateDenylistInput {
   reason?: string | null;
 }
 
+export interface CreatePdfMetaInput {
+  document_id: string;
+  page_count: number;
+  file_size_bytes: number;
+  storage_key: string;
+}
+
 export interface CreateFeedInput {
   id?: string;
   feed_url: string;
@@ -362,6 +369,8 @@ export interface ListDocumentsQuery {
   cursor?: string;
   limit?: number;
   isStarred?: boolean;
+  savedAfter?: string;
+  savedBefore?: string;
 }
 
 export interface PaginatedResponse<T> {
@@ -389,6 +398,49 @@ export interface ApiError {
   error: string;
   code: string;
   status: number;
+}
+
+export interface CreateSavedViewInput {
+  name: string;
+  query_ast_json: string;
+  sort_json?: string | null;
+  is_system?: number;
+  pinned_order?: number | null;
+}
+
+export interface UpdateSavedViewInput {
+  name?: string;
+  query_ast_json?: string;
+  sort_json?: string | null;
+  pinned_order?: number | null;
+}
+
+export interface ViewQueryAst {
+  filters: ViewFilter[];
+  combinator: "and" | "or";
+}
+
+export interface ViewFilter {
+  field:
+    | "type"
+    | "location"
+    | "is_read"
+    | "is_starred"
+    | "tag"
+    | "source_id"
+    | "author"
+    | "domain"
+    | "word_count"
+    | "reading_time"
+    | "saved_after"
+    | "saved_before";
+  operator: "eq" | "neq" | "gt" | "lt" | "contains" | "in";
+  value: string | number | string[];
+}
+
+export interface ViewSortConfig {
+  field: "saved_at" | "published_at" | "title" | "reading_time_minutes";
+  direction: "asc" | "desc";
 }
 
 // --- Update input types ---

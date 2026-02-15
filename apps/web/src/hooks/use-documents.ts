@@ -23,6 +23,8 @@ function buildSearchParams(query: ListDocumentsQuery): string {
   if (query.type) params.set("type", query.type);
   if (query.isStarred) params.set("isStarred", "true");
   if (query.limit) params.set("limit", String(query.limit));
+  if (query.savedAfter) params.set("savedAfter", query.savedAfter);
+  if (query.savedBefore) params.set("savedBefore", query.savedBefore);
   return params.toString();
 }
 

@@ -4,8 +4,9 @@ import {
   estimateReadingTime,
   generateExcerpt,
   MAX_RETRY_ATTEMPTS,
+  evaluateAutoTagRules,
 } from "@focus-reader/shared";
-import type { Feed } from "@focus-reader/shared";
+import type { Feed, AutoTagRule } from "@focus-reader/shared";
 import {
   getFeedsDueForPoll,
   markFeedFetched,
@@ -147,6 +148,20 @@ async function processItem(
       published_at: item.publishedAt,
       location: "inbox",
     });
+
+    // Evaluate feed auto-tag rules
+    if (feed.auto_tag_rules) {
+      const rules: AutoTagRule[] = JSON.parse(feed.auto_tag_rules);
+      const matchedTagIds = evaluateAutoTagRules(rules, {
+        title: title || "(Untitled)",
+        author: author || null,
+        url: normalized,
+        plain_text_content: plainText,
+      });
+      for (const tagId of matchedTagIds) {
+        await addTagToDocument(db, documentId, tagId);
+      }
+    }
 
     // Inherit feed tags
     const feedTags = await getTagsForFeed(db, feed.id);

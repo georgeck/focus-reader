@@ -19,6 +19,12 @@ interface DocumentListProps {
   feedId?: string;
   isStarred?: boolean;
   title: string;
+  type?: DocumentType;
+  status?: "read" | "unread";
+  savedAfter?: string;
+  savedBefore?: string;
+  sortBy?: ListDocumentsQuery["sortBy"];
+  sortDir?: ListDocumentsQuery["sortDir"];
 }
 
 export function DocumentList({
@@ -28,6 +34,12 @@ export function DocumentList({
   feedId,
   isStarred,
   title,
+  type: typeProp,
+  status,
+  savedAfter,
+  savedBefore,
+  sortBy: sortByProp,
+  sortDir: sortDirProp,
 }: DocumentListProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -45,9 +57,12 @@ export function DocumentList({
     subscriptionId,
     feedId,
     isStarred,
-    type: typeFilter || undefined,
-    sortBy: "saved_at",
-    sortDir: "desc",
+    type: typeFilter || typeProp || undefined,
+    status,
+    savedAfter,
+    savedBefore,
+    sortBy: sortByProp ?? "saved_at",
+    sortDir: sortDirProp ?? "desc",
   };
 
   const { documents, total, isLoading, isLoadingMore, hasMore, loadMore } =

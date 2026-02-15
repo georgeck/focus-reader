@@ -4,3 +4,4 @@ export * from "./url.js";
 export * from "./slug.js";
 export * from "./time.js";
 export * from "./utils.js";
+export * from "./auto-tag.js";

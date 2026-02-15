@@ -24,6 +24,8 @@ export async function GET(request: NextRequest) {
         cursor: params.get("cursor") || undefined,
         limit: params.get("limit") ? parseInt(params.get("limit")!) : undefined,
         isStarred: params.get("isStarred") === "true" || undefined,
+        savedAfter: params.get("savedAfter") || undefined,
+        savedBefore: params.get("savedBefore") || undefined,
       };
 
       const result = await getDocuments(db, query);

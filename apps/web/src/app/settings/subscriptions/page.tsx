@@ -15,8 +15,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Trash2, Copy, Check, Pencil, Tag, X } from "lucide-react";
+import { Trash2, Copy, Check, Pencil, Tag, X, ChevronDown, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
+import type { AutoTagRule } from "@focus-reader/shared";
+import { AutoTagEditor } from "@/components/settings/auto-tag-editor";
 
 export default function SubscriptionsSettingsPage() {
   const { subscriptions, isLoading, mutate } = useSubscriptions();
@@ -25,6 +27,7 @@ export default function SubscriptionsSettingsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [autoTagOpenId, setAutoTagOpenId] = useState<string | null>(null);
 
   const toggleActive = async (id: string, currentActive: number) => {
     const newVal = currentActive === 1 ? 0 : 1;
@@ -79,6 +82,15 @@ export default function SubscriptionsSettingsPage() {
       body: JSON.stringify({ addTagId: tagId }),
     });
     mutate();
+  };
+
+  const saveAutoTagRules = async (subId: string, rules: AutoTagRule[]) => {
+    await apiFetch(`/api/subscriptions/${subId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ auto_tag_rules: JSON.stringify(rules) }),
+    });
+    mutate();
+    toast("Auto-tag rules saved");
   };
 
   return (
@@ -224,6 +236,32 @@ export default function SubscriptionsSettingsPage() {
                 </Button>
               </div>
             </div>
+
+            {/* Auto-tag rules */}
+            <button
+              onClick={() =>
+                setAutoTagOpenId(autoTagOpenId === sub.id ? null : sub.id)
+              }
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {autoTagOpenId === sub.id ? (
+                <ChevronDown className="size-3" />
+              ) : (
+                <ChevronRight className="size-3" />
+              )}
+              Auto-tag rules
+            </button>
+            {autoTagOpenId === sub.id && (
+              <AutoTagEditor
+                rules={
+                  sub.auto_tag_rules
+                    ? JSON.parse(sub.auto_tag_rules)
+                    : []
+                }
+                onChange={(rules) => saveAutoTagRules(sub.id, rules)}
+                availableTags={tags}
+              />
+            )}
           </div>
         ))}
       </div>

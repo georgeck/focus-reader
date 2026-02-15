@@ -14,8 +14,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Trash2, Check, Pencil, Tag, X, Upload, Download, AlertCircle } from "lucide-react";
+import { Trash2, Check, Pencil, Tag, X, Upload, Download, AlertCircle, ChevronDown, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
+import type { AutoTagRule } from "@focus-reader/shared";
+import { AutoTagEditor } from "@/components/settings/auto-tag-editor";
 
 export default function FeedsSettingsPage() {
   const { feeds, isLoading, mutate } = useFeeds();
@@ -26,6 +28,7 @@ export default function FeedsSettingsPage() {
   const [addUrl, setAddUrl] = useState("");
   const [adding, setAdding] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [autoTagOpenId, setAutoTagOpenId] = useState<string | null>(null);
 
   const handleAddFeed = async () => {
     const url = addUrl.trim();
@@ -92,6 +95,15 @@ export default function FeedsSettingsPage() {
       body: JSON.stringify({ addTagId: tagId }),
     });
     mutate();
+  };
+
+  const saveAutoTagRules = async (feedId: string, rules: AutoTagRule[]) => {
+    await apiFetch(`/api/feeds/${feedId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ auto_tag_rules: JSON.stringify(rules) }),
+    });
+    mutate();
+    toast("Auto-tag rules saved");
   };
 
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -310,6 +322,32 @@ export default function FeedsSettingsPage() {
                 </Button>
               </div>
             </div>
+
+            {/* Auto-tag rules */}
+            <button
+              onClick={() =>
+                setAutoTagOpenId(autoTagOpenId === feed.id ? null : feed.id)
+              }
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {autoTagOpenId === feed.id ? (
+                <ChevronDown className="size-3" />
+              ) : (
+                <ChevronRight className="size-3" />
+              )}
+              Auto-tag rules
+            </button>
+            {autoTagOpenId === feed.id && (
+              <AutoTagEditor
+                rules={
+                  feed.auto_tag_rules
+                    ? JSON.parse(feed.auto_tag_rules)
+                    : []
+                }
+                onChange={(rules) => saveAutoTagRules(feed.id, rules)}
+                availableTags={tags}
+              />
+            )}
           </div>
         ))}
       </div>

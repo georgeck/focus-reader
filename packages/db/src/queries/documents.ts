@@ -173,6 +173,16 @@ export async function listDocuments(
     bindings.push(sanitizeFtsQuery(query.search));
     paramIdx++;
   }
+  if (query.savedAfter) {
+    conditions.push(`d.saved_at >= ?${paramIdx}`);
+    bindings.push(query.savedAfter);
+    paramIdx++;
+  }
+  if (query.savedBefore) {
+    conditions.push(`d.saved_at <= ?${paramIdx}`);
+    bindings.push(query.savedBefore);
+    paramIdx++;
+  }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 

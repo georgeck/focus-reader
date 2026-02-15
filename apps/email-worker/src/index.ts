@@ -5,7 +5,9 @@ import {
   countWords,
   estimateReadingTime,
   MAX_RETRY_ATTEMPTS,
+  evaluateAutoTagRules,
 } from "@focus-reader/shared";
+import type { AutoTagRule } from "@focus-reader/shared";
 import {
   createDocument,
   getDocument,
@@ -313,6 +315,21 @@ async function processEmail(
       content_id: att.contentId,
       storage_key: cidStorageKey,
     });
+  }
+
+  // Step 16a: Evaluate subscription auto-tag rules
+  if (subscription.auto_tag_rules) {
+    const rules: AutoTagRule[] = JSON.parse(subscription.auto_tag_rules);
+    const matchedTagIds = evaluateAutoTagRules(rules, {
+      title: parsed.subject || "(No subject)",
+      author: parsed.from.name || parsed.from.address,
+      url: null,
+      plain_text_content: parsed.text || null,
+      from_address: parsed.from.address,
+    });
+    for (const tagId of matchedTagIds) {
+      await addTagToDocument(db, documentId, tagId);
+    }
   }
 
   // Step 16: Inherit subscription tags
