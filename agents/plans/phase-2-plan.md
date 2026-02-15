@@ -2,7 +2,7 @@
 
 **Version:** 1.0
 **Date:** February 14, 2026
-**Status:** In Progress — Steps 10–13 complete
+**Status:** In Progress — Steps 10–14 complete
 **Prerequisites:** Phase 1 complete (see `phase-1-plan.md` and `phase-1-implementation-gaps.md`)
 
 ---
@@ -636,11 +636,13 @@ export async function withAuth(
 
 ---
 
-### Step 14: Keyboard Navigation, Dark Mode, and Confirmation Emails
+### Step 14: Keyboard Navigation, Dark Mode, and Confirmation Emails ✅ COMPLETE
 
 **Goal:** Complete keyboard navigation (j/k + command palette), add dark mode support, and surface confirmation emails.
 
-**Packages:** `apps/web`, `packages/shared`
+**Status:** Complete (commit `addccc9`)
+
+**Packages:** `apps/web`, `packages/shared`, `packages/db`
 
 #### 14a: j/k Document Navigation
 
@@ -714,13 +716,13 @@ export interface DocumentWithTags extends Document {
 - In `getDocumentWithTags()`: join `document_email_meta` when type is `email`.
 
 **Success criteria:**
-- [ ] `j`/`k` moves selection up/down in the document list
-- [ ] `o`/`Enter` opens the selected document
-- [ ] `Cmd+K` opens the command palette with navigation commands
-- [ ] Dark mode togglable from settings and persists across sessions
-- [ ] All UI components render correctly in both light and dark mode
-- [ ] Confirmation emails show badge in list and banner in reader
-- [ ] `pnpm build && pnpm typecheck && pnpm test` passes
+- [x] `j`/`k` moves selection up/down in the document list
+- [x] `o`/`Enter` opens the selected document
+- [x] `Cmd+K` opens the command palette with navigation commands
+- [x] Dark mode togglable from settings and persists across sessions (already complete from Phase 1)
+- [x] All UI components render correctly in both light and dark mode
+- [x] Confirmation emails show badge in list and banner in reader
+- [x] `pnpm build && pnpm typecheck && pnpm test` passes (232 tests, 0 failures)
 
 ---
 
