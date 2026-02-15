@@ -119,10 +119,6 @@ export function TagPicker({ selectedIds, onToggle, disabled = false }: TagPicker
     return <div className="text-xs text-[var(--text-tertiary)] py-2">Loading tags...</div>;
   }
 
-  if (tags.length === 0) {
-    return <div className="text-xs text-[var(--text-tertiary)] py-2">No tags created yet.</div>;
-  }
-
   return (
     <div className="mt-2 space-y-2">
       <input
@@ -153,6 +149,12 @@ export function TagPicker({ selectedIds, onToggle, disabled = false }: TagPicker
       {createError ? (
         <p className="text-[11px] text-red-300 bg-red-500/10 border border-red-500/20 rounded px-2 py-1">
           {createError}
+        </p>
+      ) : null}
+
+      {tags.length === 0 ? (
+        <p className="text-xs text-[var(--text-tertiary)] py-1">
+          No tags created yet. Type a name above and press Enter to create one.
         </p>
       ) : null}
 
@@ -211,9 +213,9 @@ export function TagPicker({ selectedIds, onToggle, disabled = false }: TagPicker
               ))}
             </div>
           </div>
-        ) : (
+        ) : tags.length > 0 ? (
           <p className="text-xs text-[var(--text-tertiary)] py-1">No matching tags.</p>
-        )}
+        ) : null}
       </div>
     </div>
   );
