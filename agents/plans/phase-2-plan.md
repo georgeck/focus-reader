@@ -2,7 +2,7 @@
 
 **Version:** 1.0
 **Date:** February 14, 2026
-**Status:** In Progress — Steps 10–11 complete
+**Status:** In Progress — Steps 10–12 complete
 **Prerequisites:** Phase 1 complete (see `phase-1-plan.md` and `phase-1-implementation-gaps.md`)
 
 ---
@@ -422,9 +422,11 @@ export async function untagFeed(db: D1Database, feedId: string, tagId: string): 
 
 ---
 
-### Step 12: Full-Text Search (FTS5)
+### Step 12: Full-Text Search (FTS5) ✅ COMPLETE
 
 **Goal:** Add a D1 migration for FTS5 indexes and wire search into the query/API/UI layers.
+
+**Status:** Complete (commit `a5c370c`)
 
 **Packages:** `packages/db`, `packages/api`, `apps/web`
 
@@ -530,12 +532,12 @@ export async function searchDocuments(
 - Search relevance: "typescript tutorial" matches document titled "TypeScript Tutorial for Beginners".
 
 **Success criteria:**
-- [ ] FTS5 migration applies cleanly on fresh and existing databases
-- [ ] `searchDocuments()` returns relevant results with snippets
-- [ ] FTS index stays in sync: new documents indexed, soft-deleted documents deindexed
-- [ ] Search UI shows results with highlighted snippets
-- [ ] `/` shortcut focuses search bar
-- [ ] `pnpm build && pnpm typecheck && pnpm test` passes
+- [x] FTS5 migration applies cleanly on fresh and existing databases
+- [x] `searchDocuments()` returns relevant results with snippets
+- [x] FTS index stays in sync: new documents indexed, soft-deleted documents deindexed
+- [x] Search UI shows results with highlighted snippets
+- [x] `/` shortcut focuses search bar
+- [x] `pnpm build && pnpm typecheck && pnpm test` passes (210 tests, 0 failures)
 
 ---
 
