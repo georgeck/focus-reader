@@ -1,0 +1,25 @@
+{
+  "name": "focus-reader-extension",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "NODE_OPTIONS='--localstorage-file=.tmp-localstorage' wxt build",
+    "dev": "NODE_OPTIONS='--localstorage-file=.tmp-localstorage' wxt",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "clean": "rm -rf .output dist node_modules"
+  },
+  "dependencies": {
+    "react": "^19",
+    "react-dom": "^19"
+  },
+  "devDependencies": {
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@wxt-dev/module-react": "^1",
+    "typescript": "^5",
+    "vitest": "~3.2.0",
+    "wxt": "^0.19"
+  }
+}

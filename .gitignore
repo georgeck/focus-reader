@@ -13,3 +13,5 @@ dist/
 *.local
 .turbo/
 *.tsbuildinfo
+.output/
+.tmp-localstorage

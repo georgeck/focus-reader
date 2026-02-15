@@ -16,6 +16,7 @@ import {
   createPdfMeta,
 } from "@focus-reader/db";
 import { extractArticle, extractMetadata, extractPdfMetadata } from "@focus-reader/parser";
+import { tagDocument } from "./tags.js";
 
 export async function getDocuments(
   db: D1Database,
@@ -62,7 +63,7 @@ export async function removeDocument(
 export async function createBookmark(
   db: D1Database,
   url: string,
-  options?: { type?: "article" | "bookmark" }
+  options?: { type?: "article" | "bookmark"; html?: string | null; tagIds?: string[] }
 ): Promise<Document> {
   // Normalize URL for deduplication
   const normalized = normalizeUrl(url);
@@ -73,21 +74,24 @@ export async function createBookmark(
     throw new DuplicateUrlError(existing.id);
   }
 
-  // Fetch the page HTML
-  let html: string | null = null;
-  try {
-    const response = await fetch(url, {
-      headers: { "User-Agent": "FocusReader/1.0" },
-      redirect: "follow",
-    });
-    if (response.ok) {
-      html = await response.text();
+  // Use provided HTML or fetch the page
+  let html: string | null = options?.html ?? null;
+  if (!html) {
+    try {
+      const response = await fetch(url, {
+        headers: { "User-Agent": "FocusReader/1.0" },
+        redirect: "follow",
+      });
+      if (response.ok) {
+        html = await response.text();
+      }
+    } catch {
+      // Fetch failed — create a bare bookmark with URL as title
     }
-  } catch {
-    // Fetch failed — create a bare bookmark with URL as title
   }
 
   const type = options?.type ?? "bookmark";
+  const tagIds = options?.tagIds ?? [];
 
   if (html) {
     // Try full article extraction first
@@ -111,6 +115,7 @@ export async function createBookmark(
         published_at: meta.publishedDate,
         origin_type: "manual",
       });
+      for (const tagId of tagIds) await tagDocument(db, doc.id, tagId);
       return doc;
     }
 
@@ -127,6 +132,7 @@ export async function createBookmark(
       published_at: meta.publishedDate,
       origin_type: "manual",
     });
+    for (const tagId of tagIds) await tagDocument(db, doc.id, tagId);
     return doc;
   }
 
@@ -137,6 +143,7 @@ export async function createBookmark(
     title: url,
     origin_type: "manual",
   });
+  for (const tagId of tagIds) await tagDocument(db, doc.id, tagId);
   return doc;
 }
 

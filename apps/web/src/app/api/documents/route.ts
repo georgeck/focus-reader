@@ -4,8 +4,10 @@ import type { ListDocumentsQuery, DocumentLocation, DocumentType, SortField, Sor
 import { getDb } from "@/lib/bindings";
 import { json, jsonError } from "@/lib/api-helpers";
 import { withAuth } from "@/lib/auth-middleware";
+import { withCors, handlePreflight } from "@/lib/cors";
 
 export async function GET(request: NextRequest) {
+  const origin = request.headers.get("origin");
   return withAuth(request, async () => {
     try {
       const db = await getDb();
@@ -29,31 +31,41 @@ export async function GET(request: NextRequest) {
       };
 
       const result = await getDocuments(db, query);
-      return json(result);
+      return withCors(json(result), origin);
     } catch (err) {
-      return jsonError("Failed to fetch documents", "FETCH_ERROR", 500);
+      return withCors(jsonError("Failed to fetch documents", "FETCH_ERROR", 500), origin);
     }
   });
 }
 
 export async function POST(request: NextRequest) {
+  const origin = request.headers.get("origin");
   return withAuth(request, async () => {
     try {
       const db = await getDb();
       const body = (await request.json()) as Record<string, unknown>;
-      const { url, type } = body as { url?: string; type?: "article" | "bookmark" };
+      const { url, type, html, tagIds } = body as {
+        url?: string;
+        type?: "article" | "bookmark";
+        html?: string | null;
+        tagIds?: string[];
+      };
 
       if (!url) {
-        return jsonError("URL is required", "MISSING_URL", 400);
+        return withCors(jsonError("URL is required", "MISSING_URL", 400), origin);
       }
 
-      const doc = await createBookmark(db, url, { type });
-      return json(doc, 201);
+      const doc = await createBookmark(db, url, { type, html, tagIds });
+      return withCors(json(doc, 201), origin);
     } catch (err) {
       if (err instanceof DuplicateUrlError) {
-        return jsonError("This URL is already saved", "DUPLICATE_URL", 409);
+        return withCors(jsonError("This URL is already saved", "DUPLICATE_URL", 409), origin);
       }
-      return jsonError("Failed to create document", "CREATE_ERROR", 500);
+      return withCors(jsonError("Failed to create document", "CREATE_ERROR", 500), origin);
     }
   });
+}
+
+export async function OPTIONS(request: NextRequest) {
+  return handlePreflight(request.headers.get("origin"));
 }
