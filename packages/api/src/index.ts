@@ -1,5 +1,6 @@
 export * from "./documents.js";
 export * from "./subscriptions.js";
 export * from "./tags.js";
+export * from "./feeds.js";
 export * from "./denylist.js";
 export * from "./auth.js";
