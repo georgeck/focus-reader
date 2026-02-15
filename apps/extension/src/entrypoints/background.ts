@@ -9,20 +9,36 @@ interface CacheEntry {
 }
 
 const CACHE_TTL_MS = 60_000;
+const NEGATIVE_CACHE_TTL_MS = 10_000;
 const pageCache = new Map<string, CacheEntry>();
 
+function normalizeCacheUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    parsed.hash = "";
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+}
+
 function getCached(url: string): CacheEntry | null {
-  const entry = pageCache.get(url);
+  const entry = pageCache.get(normalizeCacheUrl(url));
   if (!entry) return null;
-  if (Date.now() - entry.timestamp > CACHE_TTL_MS) {
-    pageCache.delete(url);
+  const ttl = entry.doc ? CACHE_TTL_MS : NEGATIVE_CACHE_TTL_MS;
+  if (Date.now() - entry.timestamp > ttl) {
+    pageCache.delete(normalizeCacheUrl(url));
     return null;
   }
   return entry;
 }
 
 function setCache(url: string, doc: DocumentDetail | null): void {
-  pageCache.set(url, { doc, timestamp: Date.now() });
+  pageCache.set(normalizeCacheUrl(url), { doc, timestamp: Date.now() });
+}
+
+function clearCache(url: string): void {
+  pageCache.delete(normalizeCacheUrl(url));
 }
 
 function isHttpUrl(url: string): boolean {
@@ -130,7 +146,7 @@ export default defineBackground(() => {
           throw new Error("Couldn't capture article content. Use 'Save as bookmark'.");
         }
         await savePage(tab.url, html, { type: "article" });
-        pageCache.delete(tab.url);
+        clearCache(tab.url);
         await checkAndUpdateBadge(tab.id, tab.url);
         await notify("Focus Reader", "Saved page as article.");
       } else if (info.menuItemId === "save-bookmark" && tab?.url) {
@@ -139,7 +155,7 @@ export default defineBackground(() => {
         }
         await savePage(tab.url, null, { type: "bookmark" });
         if (tab.id) {
-          pageCache.delete(tab.url);
+          clearCache(tab.url);
           await checkAndUpdateBadge(tab.id, tab.url);
         }
         await notify("Focus Reader", "Saved page as bookmark.");
@@ -191,7 +207,7 @@ export default defineBackground(() => {
           throw new Error("Couldn't capture article content. Use bookmark shortcut.");
         }
         await savePage(tab.url, html, { type: "article" });
-        pageCache.delete(tab.url);
+        clearCache(tab.url);
         await checkAndUpdateBadge(tab.id, tab.url);
         await notify("Focus Reader", "Saved page as article.");
       } else if (command === "save-bookmark") {
@@ -199,7 +215,7 @@ export default defineBackground(() => {
           throw new Error("Only HTTP/HTTPS pages can be saved.");
         }
         await savePage(tab.url, null, { type: "bookmark" });
-        pageCache.delete(tab.url);
+        clearCache(tab.url);
         await checkAndUpdateBadge(tab.id, tab.url);
         await notify("Focus Reader", "Saved page as bookmark.");
       }
@@ -211,9 +227,11 @@ export default defineBackground(() => {
 
   // Message handlers (from popup)
   onMessage("getPageStatus", async (message) => {
-    const { url } = message.data;
-    const cached = getCached(url);
-    if (cached) return cached.doc;
+    const { url, force } = message.data;
+    if (!force) {
+      const cached = getCached(url);
+      if (cached) return cached.doc;
+    }
 
     const doc = await lookupByUrl(url);
     setCache(url, doc);
@@ -222,7 +240,7 @@ export default defineBackground(() => {
 
   onMessage("invalidatePageStatus", async (message) => {
     const { url } = message.data;
-    pageCache.delete(url);
+    clearCache(url);
 
     // Re-check badge on the active tab
     const [tab] = await browser.tabs.query({ active: true, currentWindow: true });

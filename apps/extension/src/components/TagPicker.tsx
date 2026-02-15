@@ -4,9 +4,10 @@ import { getTags, type Tag } from "@/lib/api-client";
 interface TagPickerProps {
   selectedIds: string[];
   onToggle: (tagId: string) => void;
+  disabled?: boolean;
 }
 
-export function TagPicker({ selectedIds, onToggle }: TagPickerProps) {
+export function TagPicker({ selectedIds, onToggle, disabled = false }: TagPickerProps) {
   const [tags, setTags] = useState<Tag[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -31,6 +32,7 @@ export function TagPicker({ selectedIds, onToggle }: TagPickerProps) {
             type="checkbox"
             checked={selectedIds.includes(tag.id)}
             onChange={() => onToggle(tag.id)}
+            disabled={disabled}
             className="rounded border-gray-300"
           />
           <span

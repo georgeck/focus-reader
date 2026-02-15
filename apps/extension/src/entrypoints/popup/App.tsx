@@ -69,6 +69,7 @@ export function App() {
   const [doc, setDoc] = useState<DocumentDetail | null>(null);
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const [showTags, setShowTags] = useState(false);
+  const [showSavedTagEditor, setShowSavedTagEditor] = useState(false);
   const [collections, setCollections] = useState<Collection[]>([]);
   const [showCollections, setShowCollections] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -113,6 +114,7 @@ export function App() {
     setError("");
     setCaptureFailed(false);
     setConfirmDelete(false);
+    setShowSavedTagEditor(false);
     try {
       const config = await getConfig();
       if (!config) {
@@ -137,7 +139,7 @@ export function App() {
         return;
       }
 
-      const result = await sendMessage("getPageStatus", { url: tab.url });
+      const result = await sendMessage("getPageStatus", { url: tab.url, force: true });
       if (result) {
         setDoc(result);
         setStatus("saved");
@@ -204,7 +206,7 @@ export function App() {
         sendMessage("invalidatePageStatus", { url: pageUrl }).catch(() => {});
 
         try {
-          const result = await sendMessage("getPageStatus", { url: pageUrl });
+          const result = await sendMessage("getPageStatus", { url: pageUrl, force: true });
           if (result) {
             setDoc(result);
             setActiveTab("saved");
@@ -241,7 +243,23 @@ export function App() {
           setStatus("saved");
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Save failed");
+        const message = err instanceof Error ? err.message : "Save failed";
+        if (message.includes("already saved")) {
+          try {
+            await sendMessage("invalidatePageStatus", { url: pageUrl });
+            const existing = await sendMessage("getPageStatus", { url: pageUrl, force: true });
+            if (existing) {
+              setDoc(existing);
+              setActiveTab("saved");
+              setError("");
+              setStatus("saved");
+              return;
+            }
+          } catch {
+            // fall through to default error handling
+          }
+        }
+        setError(message);
         setStatus("error");
       }
     },
@@ -254,7 +272,7 @@ export function App() {
       try {
         await action();
         await sendMessage("invalidatePageStatus", { url: pageUrl });
-        const result = await sendMessage("getPageStatus", { url: pageUrl });
+        const result = await sendMessage("getPageStatus", { url: pageUrl, force: true });
         if (result) {
           setDoc(result);
           setStatus("saved");
@@ -280,6 +298,7 @@ export function App() {
       setDoc(null);
       setStatus("not-saved");
       setConfirmDelete(false);
+      setShowSavedTagEditor(false);
       setActiveTab("page");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Delete failed");
@@ -312,6 +331,20 @@ export function App() {
       setError("Failed to load collections.");
     }
   }, [collections.length]);
+
+  const handleToggleSavedTag = useCallback(
+    async (tagId: string) => {
+      if (!doc?.id) return;
+      const hasTag = doc.tags.some((tag) => tag.id === tagId);
+      await handleAction(async () => {
+        await updateDocument(
+          doc.id,
+          hasTag ? { removeTagId: tagId } : { addTagId: tagId }
+        );
+      });
+    },
+    [doc, handleAction]
+  );
 
   const saveQuickSettings = useCallback(async () => {
     setSavingSettings(true);
@@ -463,11 +496,20 @@ export function App() {
                   className="mt-3 w-full text-center text-xs text-[var(--text-tertiary)] hover:text-[var(--text-primary)]"
                   onClick={() => setShowTags((prev) => !prev)}
                 >
-                  {showTags ? "Hide tags" : "Add tags"}
+                  {showTags
+                    ? "Hide tags"
+                    : `Add tags${selectedTagIds.length > 0 ? ` (${selectedTagIds.length})` : ""}`}
                 </button>
+                <p className="mt-1 text-[11px] text-[var(--text-tertiary)] text-center">
+                  Tags selected here are applied when you save this page.
+                </p>
                 {showTags ? (
                   <div className="mt-2 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2">
-                    <TagPicker selectedIds={selectedTagIds} onToggle={handleToggleTag} />
+                    <TagPicker
+                      selectedIds={selectedTagIds}
+                      onToggle={handleToggleTag}
+                      disabled={status === "saving"}
+                    />
                   </div>
                 ) : null}
               </>
@@ -475,6 +517,48 @@ export function App() {
           </>
         ) : isSaved && doc ? (
           <>
+            <div className="mb-3 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] p-3">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-medium text-[var(--text-secondary)]">Tags</span>
+                <button
+                  disabled={actionInProgress}
+                  className="text-xs px-2 py-1 rounded-md border border-[var(--border)] hover:bg-[var(--bg-hover)] disabled:opacity-50"
+                  onClick={() => setShowSavedTagEditor((prev) => !prev)}
+                >
+                  {showSavedTagEditor ? "Done" : "Edit tags"}
+                </button>
+              </div>
+
+              {doc.tags.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {doc.tags.map((tag) => (
+                    <span
+                      key={tag.id}
+                      className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-md border border-[var(--border)]"
+                    >
+                      <span
+                        className="w-2 h-2 rounded-full"
+                        style={{ backgroundColor: tag.color ?? "#888" }}
+                      />
+                      {tag.name}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-[var(--text-tertiary)]">No tags yet.</p>
+              )}
+
+              {showSavedTagEditor ? (
+                <div className="mt-2">
+                  <TagPicker
+                    selectedIds={doc.tags.map((tag) => tag.id)}
+                    onToggle={handleToggleSavedTag}
+                    disabled={actionInProgress}
+                  />
+                </div>
+              ) : null}
+            </div>
+
             <div className="grid grid-cols-2 gap-2 mb-2">
               <button
                 disabled={actionInProgress}
