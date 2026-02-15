@@ -1,7 +1,14 @@
 #:schema node_modules/wrangler/config-schema.json
 name = "focus-reader-web"
+account_id = "9303008e4c04f5ef81b9b7ccfe6011fd"
+main = ".open-next/worker.js"
 compatibility_date = "2026-02-13"
 compatibility_flags = ["nodejs_compat"]
+routes = [{ pattern = "reader.level-up.dev", custom_domain = true }]
+
+[assets]
+directory = ".open-next/assets"
+binding = "ASSETS"
 
 [vars]
 EMAIL_DOMAIN = "level-up.dev"
@@ -16,7 +23,6 @@ migrations_dir = "../../packages/db/migrations"
 binding = "FOCUS_STORAGE"
 bucket_name = "focus-reader-storage"
 
-# Share D1/R2 state with email-worker during local development
-[miniflare]
-d1_persist = "../../.wrangler/state/v3/d1"
-r2_persist = "../../.wrangler/state/v3/r2"
+[[r2_buckets]]
+binding = "NEXT_INC_CACHE_R2_BUCKET"
+bucket_name = "focus-reader-cache"
