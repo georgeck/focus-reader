@@ -3,6 +3,9 @@ import { defineConfig } from "wxt";
 export default defineConfig({
   srcDir: "src",
   modules: ["@wxt-dev/module-react"],
+  runner: {
+    chromiumArgs: ["--user-data-dir=./.wxt/chrome-data"],
+  },
   manifest: {
     name: "Focus Reader",
     description: "Save pages to Focus Reader as articles or bookmarks",

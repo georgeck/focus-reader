@@ -15,3 +15,4 @@ dist/
 *.tsbuildinfo
 .output/
 .tmp-localstorage
+/apps/extension/.wxt/
