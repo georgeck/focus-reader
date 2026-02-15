@@ -2,7 +2,7 @@
 
 **Version:** 1.0
 **Date:** February 14, 2026
-**Status:** In Progress — Steps 10–12 complete
+**Status:** In Progress — Steps 10–13 complete
 **Prerequisites:** Phase 1 complete (see `phase-1-plan.md` and `phase-1-implementation-gaps.md`)
 
 ---
@@ -541,9 +541,11 @@ export async function searchDocuments(
 
 ---
 
-### Step 13: Auth Enforcement and API Key Management
+### Step 13: Auth Enforcement and API Key Management ✅ COMPLETE
 
 **Goal:** Wire authentication into all API routes and add API key CRUD for programmatic access.
+
+**Status:** Complete (commit `2ae89e0`)
 
 **Packages:** `packages/db`, `packages/api`, `apps/web`
 
@@ -624,13 +626,13 @@ export async function withAuth(
 - `apps/web/src/__tests__/auth-middleware.test.ts` — verify 401 on unauthenticated requests when auth env vars are configured.
 
 **Success criteria:**
-- [ ] All API routes return 401 when CF Access env vars are set and no valid auth is provided
-- [ ] API routes pass through in dev mode (no CF_ACCESS env vars)
-- [ ] API key creation returns plaintext once, stores only hash
-- [ ] API key authentication works via `Authorization: Bearer <key>` header
-- [ ] Revoked keys are rejected
-- [ ] API keys settings page shows list with create/revoke actions
-- [ ] `pnpm build && pnpm typecheck && pnpm test` passes
+- [x] All API routes return 401 when CF Access env vars are set and no valid auth is provided
+- [x] API routes pass through in dev mode (no CF_ACCESS env vars)
+- [x] API key creation returns plaintext once, stores only hash
+- [x] API key authentication works via `Authorization: Bearer <key>` header
+- [x] Revoked keys are rejected
+- [x] API keys settings page shows list with create/revoke actions
+- [x] `pnpm build && pnpm typecheck && pnpm test` passes (99 tests, 0 failures)
 
 ---
 
