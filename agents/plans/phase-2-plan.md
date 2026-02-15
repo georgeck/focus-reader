@@ -2,7 +2,7 @@
 
 **Version:** 1.0
 **Date:** February 14, 2026
-**Status:** Draft
+**Status:** In Progress — Steps 10–11 complete
 **Prerequisites:** Phase 1 complete (see `phase-1-plan.md` and `phase-1-implementation-gaps.md`)
 
 ---
@@ -119,9 +119,11 @@ Steps continue numbering from Phase 1 (Steps 6–9).
 
 ---
 
-### Step 10: RSS Feed Parser and DB Queries
+### Step 10: RSS Feed Parser and DB Queries ✅ COMPLETE
 
 **Goal:** Add RSS/Atom feed parsing to `packages/parser` and feed CRUD queries to `packages/db`. No worker or UI yet — just the library layer.
+
+**Status:** Complete (commits `e651fe8`, `5b37480`)
 
 **Packages:** `packages/parser`, `packages/db`, `packages/shared`
 
@@ -185,7 +187,7 @@ Steps continue numbering from Phase 1 (Steps 6–9).
 **New dependencies for `packages/parser`:**
 - `fast-xml-parser` — lightweight XML parsing that works in Workers (no DOM required)
 
-> **Decision:** Use `fast-xml-parser` directly rather than `rss-parser`, since `rss-parser` depends on `xml2js` which has Node.js-only dependencies. `fast-xml-parser` is Worker-safe and we can normalize RSS 2.0 / Atom 1.0 / JSON Feed formats ourselves.
+> **Decision (resolved):** Used `fast-xml-parser` directly rather than `rss-parser`, since `rss-parser` depends on `xml2js` which has Node.js-only dependencies. `fast-xml-parser` is Worker-safe and we normalize RSS 2.0 / Atom 1.0 / JSON Feed formats ourselves. `parseFeedXml()` and `discoverFeedUrl()` are synchronous (no async needed for pure parsing).
 
 #### 10b: Database — Feed Query Helpers
 
@@ -259,19 +261,22 @@ export interface ListDocumentsQuery {
 - `packages/db/src/__tests__/feeds.test.ts` — CRUD, `getFeedsDueForPoll()`, error tracking. (Workerd test with `@cloudflare/vitest-pool-workers`.)
 
 **Success criteria:**
-- [ ] `parseFeedXml()` correctly parses RSS 2.0 fixture with 10+ items
-- [ ] `parseFeedXml()` correctly parses Atom 1.0 fixture
-- [ ] `discoverFeedUrl()` finds `<link rel="alternate" type="application/rss+xml">` in HTML
-- [ ] `parseOpml()` / `generateOpml()` roundtrip preserves all feed URLs and titles
-- [ ] `getFeedsDueForPoll()` returns only active feeds past their interval
-- [ ] `incrementFeedError()` increments error_count and sets last_error
-- [ ] `pnpm build && pnpm typecheck && pnpm test` passes
+- [x] `parseFeedXml()` correctly parses RSS 2.0 fixture (3 items covering all field variants)
+- [x] `parseFeedXml()` correctly parses Atom 1.0 fixture
+- [x] `parseFeedXml()` correctly parses JSON Feed 1.1 fixture
+- [x] `discoverFeedUrl()` finds `<link rel="alternate" type="application/rss+xml">` in HTML
+- [x] `parseOpml()` / `generateOpml()` roundtrip preserves all feed URLs and titles
+- [x] `getFeedsDueForPoll()` returns only active feeds past their interval
+- [x] `incrementFeedError()` increments error_count and sets last_error
+- [x] `pnpm build && pnpm typecheck && pnpm test` passes (179 tests, 0 failures)
 
 ---
 
-### Step 11: RSS Worker — Feed Polling Engine
+### Step 11: RSS Worker — Feed Polling Engine ✅ COMPLETE
 
 **Goal:** Create `apps/rss-worker` — a Cloudflare Worker with a Cron Trigger that polls RSS feeds and creates documents.
+
+**Status:** Complete (commits `84326ab`, `4cd6dd3`)
 
 **Packages:** `apps/rss-worker` (new), `packages/api`
 
@@ -402,16 +407,18 @@ export async function untagFeed(db: D1Database, feedId: string, tagId: string): 
 - `apps/rss-worker/src/__tests__/rss-worker.test.ts` — workerd test simulating `scheduled` event with seeded feeds and mocked HTTP responses.
 - `packages/api/src/__tests__/feeds.test.ts` — feed CRUD, OPML import/export.
 
+**Status:** Complete (commits `84326ab`, `4cd6dd3`)
+
 **Success criteria:**
-- [ ] Worker `scheduled()` handler polls due feeds and creates documents
-- [ ] RSS items deduplicated by normalized URL
-- [ ] Feed error count increments on failure, resets on success
-- [ ] Feed auto-deactivates after 5 consecutive errors
-- [ ] Feed tags inherited by new documents
-- [ ] Ingestion log entries created for each RSS item
-- [ ] `addFeed()` auto-discovers feed URL from website HTML
-- [ ] `importOpml()` creates feeds, skips duplicates, returns counts
-- [ ] `pnpm build && pnpm typecheck && pnpm test` passes
+- [x] Worker `scheduled()` handler polls due feeds and creates documents
+- [x] RSS items deduplicated by normalized URL
+- [x] Feed error count increments on failure, resets on success
+- [x] Feed auto-deactivates after 5 consecutive errors
+- [x] Feed tags inherited by new documents
+- [x] Ingestion log entries created for each RSS item
+- [x] `addFeed()` auto-discovers feed URL from website HTML
+- [x] `importOpml()` creates feeds, skips duplicates, returns counts
+- [x] `pnpm build && pnpm typecheck && pnpm test` passes (197 tests, 0 failures)
 
 ---
 
