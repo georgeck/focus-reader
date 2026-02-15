@@ -22,7 +22,8 @@ import { SortableDocumentRow } from "@/components/collections/sortable-document-
 import { CollectionDialog } from "@/components/dialogs/collection-dialog";
 import { apiFetch } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
-import { Pencil, Trash2, FolderOpen } from "lucide-react";
+import { useApp } from "@/contexts/app-context";
+import { Pencil, Trash2, FolderOpen, PanelLeftOpen } from "lucide-react";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -34,6 +35,7 @@ export default function CollectionPage({
   const { id } = use(params);
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { sidebarCollapsed, toggleSidebar } = useApp();
   const { collection, isLoading, mutate } = useCollection(id);
   const { mutate: mutateList } = useCollections();
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -132,6 +134,11 @@ export default function CollectionPage({
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="flex items-center gap-3 border-b px-6 py-4">
+        {sidebarCollapsed && (
+          <Button variant="ghost" size="icon" className="size-7" onClick={toggleSidebar}>
+            <PanelLeftOpen className="size-4" />
+          </Button>
+        )}
         <FolderOpen className="size-5 text-muted-foreground" />
         <div className="flex-1 min-w-0">
           <h1 className="text-lg font-semibold truncate">{collection.name}</h1>

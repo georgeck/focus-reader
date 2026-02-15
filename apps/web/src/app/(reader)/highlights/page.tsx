@@ -5,12 +5,15 @@ import { useHighlights } from "@/hooks/use-highlights";
 import { useTags } from "@/hooks/use-tags";
 import { useRouter, usePathname } from "next/navigation";
 import { HIGHLIGHT_COLORS } from "@focus-reader/shared";
-import { Highlighter } from "lucide-react";
+import { Highlighter, PanelLeftOpen } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useApp } from "@/contexts/app-context";
 import { timeAgo } from "@/lib/format";
 
 export default function HighlightsPage() {
   const router = useRouter();
   const pathname = usePathname();
+  const { sidebarCollapsed, toggleSidebar } = useApp();
   const { tags } = useTags();
   const [colorFilter, setColorFilter] = useState<string | undefined>();
   const [tagFilter, setTagFilter] = useState<string | undefined>();
@@ -41,6 +44,11 @@ export default function HighlightsPage() {
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b">
         <div className="flex items-center gap-2">
+          {sidebarCollapsed && (
+            <Button variant="ghost" size="icon" className="size-7" onClick={toggleSidebar}>
+              <PanelLeftOpen className="size-4" />
+            </Button>
+          )}
           <Highlighter className="size-4 text-muted-foreground" />
           <h1 className="text-lg font-semibold">Highlights</h1>
           <span className="text-sm text-muted-foreground">({total})</span>
