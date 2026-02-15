@@ -123,6 +123,17 @@
   }
 }
 
+/* Search snippet highlights */
+mark {
+  background-color: oklch(0.9 0.1 90);
+  color: inherit;
+  border-radius: 2px;
+  padding-inline: 1px;
+}
+.dark mark {
+  background-color: oklch(0.4 0.1 90);
+}
+
 /* Hide scrollbar for carousel */
 .hide-scrollbar {
   -ms-overflow-style: none;
