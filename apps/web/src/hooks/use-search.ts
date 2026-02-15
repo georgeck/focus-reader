@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import useSWR from "swr";
 import type {
   PaginatedResponse,
@@ -31,8 +32,10 @@ export function useSearch(
     fetcher
   );
 
+  const results = useMemo(() => data?.items ?? [], [data]);
+
   return {
-    results: data?.items ?? [],
+    results,
     total: data?.total ?? 0,
     isLoading,
     error,

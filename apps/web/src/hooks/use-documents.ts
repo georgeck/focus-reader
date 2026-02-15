@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import useSWR from "swr";
 import useSWRInfinite from "swr/infinite";
 import type {
@@ -18,6 +19,8 @@ function buildSearchParams(query: ListDocumentsQuery): string {
   if (query.search) params.set("search", query.search);
   if (query.sortBy) params.set("sortBy", query.sortBy);
   if (query.sortDir) params.set("sortDir", query.sortDir);
+  if (query.feedId) params.set("feedId", query.feedId);
+  if (query.type) params.set("type", query.type);
   if (query.isStarred) params.set("isStarred", "true");
   if (query.limit) params.set("limit", String(query.limit));
   return params.toString();
@@ -43,7 +46,7 @@ export function useDocuments(query: ListDocumentsQuery) {
       revalidateFirstPage: false,
     });
 
-  const documents = data ? data.flatMap((page) => page.items) : [];
+  const documents = useMemo(() => data ? data.flatMap((page) => page.items) : [], [data]);
   const total = data?.[0]?.total ?? 0;
   const isLoading = !data && !error;
   const isLoadingMore =

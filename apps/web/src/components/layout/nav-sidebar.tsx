@@ -19,6 +19,7 @@ import {
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { useSubscriptions } from "@/hooks/use-subscriptions";
+import { useFeeds } from "@/hooks/use-feeds";
 import { useTags } from "@/hooks/use-tags";
 import { useApp } from "@/contexts/app-context";
 import { Button } from "@/components/ui/button";
@@ -36,8 +37,10 @@ export function NavSidebar() {
   const pathname = usePathname();
   const { sidebarCollapsed, toggleSidebar } = useApp();
   const { subscriptions } = useSubscriptions();
+  const { feeds } = useFeeds();
   const { tags } = useTags();
   const [subsOpen, setSubsOpen] = useState(true);
+  const [feedsOpen, setFeedsOpen] = useState(true);
   const [tagsOpen, setTagsOpen] = useState(true);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
 
@@ -115,6 +118,46 @@ export function NavSidebar() {
                   {sub.unreadCount > 0 && (
                     <span className="text-xs text-muted-foreground">
                       {sub.unreadCount}
+                    </span>
+                  )}
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Feeds */}
+        <div className="mt-4">
+          <button
+            onClick={() => setFeedsOpen(!feedsOpen)}
+            className="flex w-full items-center justify-between px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground"
+          >
+            <span>Feeds</span>
+            {feedsOpen ? (
+              <ChevronDown className="size-3.5" />
+            ) : (
+              <ChevronRight className="size-3.5" />
+            )}
+          </button>
+          {feedsOpen && (
+            <div className="space-y-0.5">
+              {feeds.map((feed) => (
+                <Link
+                  key={feed.id}
+                  href={`/feeds/${feed.id}`}
+                  className={cn(
+                    "flex items-center gap-3 rounded-md px-3 py-1.5 text-sm transition-colors hover:bg-sidebar-accent",
+                    pathname === `/feeds/${feed.id}` &&
+                      "bg-sidebar-accent font-medium"
+                  )}
+                >
+                  <span className="flex size-5 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary">
+                    {feed.title.charAt(0).toUpperCase()}
+                  </span>
+                  <span className="flex-1 truncate">{feed.title}</span>
+                  {feed.unreadCount > 0 && (
+                    <span className="text-xs text-muted-foreground">
+                      {feed.unreadCount}
                     </span>
                   )}
                 </Link>

@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useCallback, useState } from "react";
+import { useEffect, useRef, useCallback, useState, useMemo } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
-import type { ListDocumentsQuery, DocumentLocation } from "@focus-reader/shared";
+import type { ListDocumentsQuery, DocumentLocation, DocumentType } from "@focus-reader/shared";
 import { useDocuments } from "@/hooks/use-documents";
 import { useSearch } from "@/hooks/use-search";
 import { useApp } from "@/contexts/app-context";
@@ -16,6 +16,7 @@ interface DocumentListProps {
   location?: DocumentLocation;
   tagId?: string;
   subscriptionId?: string;
+  feedId?: string;
   isStarred?: boolean;
   title: string;
 }
@@ -24,6 +25,7 @@ export function DocumentList({
   location,
   tagId,
   subscriptionId,
+  feedId,
   isStarred,
   title,
 }: DocumentListProps) {
@@ -34,12 +36,15 @@ export function DocumentList({
   const { setSelectedDocumentId, setDocumentIds, setCurrentDocumentIndex } = useApp();
   const sentinelRef = useRef<HTMLDivElement>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [typeFilter, setTypeFilter] = useState<DocumentType | null>(null);
 
   const query: ListDocumentsQuery = {
     location,
     tagId,
     subscriptionId,
+    feedId,
     isStarred,
+    type: typeFilter || undefined,
     sortBy: "saved_at",
     sortDir: "desc",
   };
@@ -71,7 +76,10 @@ export function DocumentList({
   }, [hasMore, loadMore, isSearchActive]);
 
   // Determine which data to display
-  const displayDocuments = isSearchActive ? searchResults : documents;
+  const displayDocuments = useMemo(
+    () => (isSearchActive ? searchResults : documents),
+    [isSearchActive, searchResults, documents]
+  );
 
   // Sync document IDs to app context for keyboard navigation
   useEffect(() => {
@@ -111,6 +119,8 @@ export function DocumentList({
           total={0}
           onSearch={handleSearch}
           isSearchActive={isSearchActive}
+          onTypeFilter={setTypeFilter}
+          selectedType={typeFilter}
         />
         {Array.from({ length: 8 }).map((_, i) => (
           <div key={i} className="flex gap-3 px-4 py-3 border-b">
@@ -134,6 +144,8 @@ export function DocumentList({
           total={0}
           onSearch={handleSearch}
           isSearchActive={isSearchActive}
+          onTypeFilter={setTypeFilter}
+          selectedType={typeFilter}
         />
         {isSearchActive ? (
           <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">

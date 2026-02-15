@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { getDocuments, createBookmark, DuplicateUrlError } from "@focus-reader/api";
-import type { ListDocumentsQuery, DocumentLocation, SortField, SortDirection } from "@focus-reader/shared";
+import type { ListDocumentsQuery, DocumentLocation, DocumentType, SortField, SortDirection } from "@focus-reader/shared";
 import { getDb } from "@/lib/bindings";
 import { json, jsonError } from "@/lib/api-helpers";
 import { withAuth } from "@/lib/auth-middleware";
@@ -16,6 +16,8 @@ export async function GET(request: NextRequest) {
         status: (params.get("status") as "read" | "unread") || undefined,
         tagId: params.get("tagId") || undefined,
         subscriptionId: params.get("subscriptionId") || undefined,
+        feedId: params.get("feedId") || undefined,
+        type: (params.get("type") as DocumentType) || undefined,
         search: params.get("search") || undefined,
         sortBy: (params.get("sortBy") as SortField) || undefined,
         sortDir: (params.get("sortDir") as SortDirection) || undefined,

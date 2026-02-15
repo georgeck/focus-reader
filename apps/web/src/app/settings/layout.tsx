@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 const SETTINGS_NAV = [
   { label: "General", path: "/settings", icon: null },
   { label: "Subscriptions", path: "/settings/subscriptions", icon: Rss },
+  { label: "Feeds", path: "/settings/feeds", icon: Rss },
   { label: "Denylist", path: "/settings/denylist", icon: Shield },
   { label: "Email", path: "/settings/email", icon: Mail },
   { label: "Ingestion Log", path: "/settings/ingestion-log", icon: ScrollText },
