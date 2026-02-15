@@ -56,10 +56,38 @@ export async function getFeedByUrl(
   feedUrl: string
 ): Promise<Feed | null> {
   const result = await db
+    .prepare("SELECT * FROM feed WHERE feed_url = ?1 AND deleted_at IS NULL")
+    .bind(feedUrl)
+    .first<Feed>();
+  return result ?? null;
+}
+
+export async function getFeedByUrlIncludeDeleted(
+  db: D1Database,
+  feedUrl: string
+): Promise<Feed | null> {
+  const result = await db
     .prepare("SELECT * FROM feed WHERE feed_url = ?1")
     .bind(feedUrl)
     .first<Feed>();
   return result ?? null;
+}
+
+export async function restoreFeed(
+  db: D1Database,
+  id: string
+): Promise<Feed> {
+  const now = nowISO();
+  await db
+    .prepare(
+      "UPDATE feed SET deleted_at = NULL, is_active = 1, error_count = 0, last_error = NULL, updated_at = ?1 WHERE id = ?2"
+    )
+    .bind(now, id)
+    .run();
+  return (await db
+    .prepare("SELECT * FROM feed WHERE id = ?1")
+    .bind(id)
+    .first<Feed>())!;
 }
 
 export async function listFeeds(

@@ -7,6 +7,8 @@ import {
   listFeeds,
   createFeed,
   getFeedByUrl,
+  getFeedByUrlIncludeDeleted,
+  restoreFeed,
   updateFeed,
   softDeleteFeed,
   hardDeleteFeed,
@@ -30,6 +32,12 @@ export async function addFeed(db: D1Database, url: string): Promise<Feed> {
   const existingDirect = await getFeedByUrl(db, url);
   if (existingDirect) {
     throw new DuplicateFeedError(existingDirect.id);
+  }
+
+  // Check if soft-deleted — restore instead of creating new
+  const deletedDirect = await getFeedByUrlIncludeDeleted(db, url);
+  if (deletedDirect && deletedDirect.deleted_at) {
+    return restoreFeed(db, deletedDirect.id);
   }
 
   let feedUrl = url;
@@ -60,6 +68,12 @@ export async function addFeed(db: D1Database, url: string): Promise<Feed> {
       throw new DuplicateFeedError(existingDiscovered.id);
     }
 
+    // Check soft-deleted for discovered URL
+    const deletedDiscovered = await getFeedByUrlIncludeDeleted(db, feedUrl);
+    if (deletedDiscovered && deletedDiscovered.deleted_at) {
+      return restoreFeed(db, deletedDiscovered.id);
+    }
+
     parsedFeed = await fetchFeed(feedUrl);
   }
 
@@ -69,6 +83,12 @@ export async function addFeed(db: D1Database, url: string): Promise<Feed> {
     const existingFinal = await getFeedByUrl(db, feedUrl);
     if (existingFinal) {
       throw new DuplicateFeedError(existingFinal.id);
+    }
+
+    // Check soft-deleted for final resolved URL
+    const deletedFinal = await getFeedByUrlIncludeDeleted(db, feedUrl);
+    if (deletedFinal && deletedFinal.deleted_at) {
+      return restoreFeed(db, deletedFinal.id);
     }
   }
 
@@ -110,11 +130,21 @@ export async function importOpml(
   let skipped = 0;
 
   for (const feed of feeds) {
+    // Skip active duplicates
     const existing = await getFeedByUrl(db, feed.feedUrl);
     if (existing) {
       skipped++;
       continue;
     }
+
+    // Restore soft-deleted feeds
+    const deleted = await getFeedByUrlIncludeDeleted(db, feed.feedUrl);
+    if (deleted && deleted.deleted_at) {
+      await restoreFeed(db, deleted.id);
+      imported++;
+      continue;
+    }
+
     await createFeed(db, {
       feed_url: feed.feedUrl,
       title: feed.title || feed.feedUrl,

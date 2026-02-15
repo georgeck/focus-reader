@@ -90,9 +90,9 @@ export default function FeedsSettingsPage() {
   };
 
   const addTagToFeed = async (feedId: string, tagId: string) => {
-    await apiFetch(`/api/feeds/${feedId}`, {
-      method: "PATCH",
-      body: JSON.stringify({ addTagId: tagId }),
+    await apiFetch(`/api/feeds/${feedId}/tags`, {
+      method: "POST",
+      body: JSON.stringify({ tagId }),
     });
     mutate();
   };
@@ -110,12 +110,14 @@ export default function FeedsSettingsPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     try {
-      const xml = await file.text();
-      const result = await apiFetch<{ imported: number; skipped: number }>("/api/feeds/import", {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/feeds/import", {
         method: "POST",
-        headers: { "Content-Type": "text/xml" },
-        body: xml,
+        body: formData,
       });
+      if (!res.ok) throw new Error();
+      const result = (await res.json()) as { imported: number; skipped: number };
       mutate();
       toast(`Imported ${result.imported} feeds (${result.skipped} skipped)`);
     } catch {
@@ -228,6 +230,7 @@ export default function FeedsSettingsPage() {
                       size="icon"
                       className="size-7"
                       onClick={() => saveRename(feed.id)}
+                      aria-label="Save name"
                     >
                       <Check className="size-3" />
                     </Button>
@@ -236,6 +239,7 @@ export default function FeedsSettingsPage() {
                       size="icon"
                       className="size-7"
                       onClick={() => setEditingId(null)}
+                      aria-label="Cancel rename"
                     >
                       <X className="size-3" />
                     </Button>
@@ -250,6 +254,7 @@ export default function FeedsSettingsPage() {
                       size="icon"
                       className="size-6 opacity-0 group-hover:opacity-100 hover:opacity-100"
                       onClick={() => startRename(feed.id, feed.title)}
+                      aria-label="Rename feed"
                     >
                       <Pencil className="size-3" />
                     </Button>
@@ -285,6 +290,7 @@ export default function FeedsSettingsPage() {
                       variant="ghost"
                       size="icon"
                       className="size-8 text-muted-foreground"
+                      aria-label="Manage tags"
                     >
                       <Tag className="size-4" />
                     </Button>
@@ -310,6 +316,7 @@ export default function FeedsSettingsPage() {
                 <Switch
                   checked={feed.is_active === 1}
                   onCheckedChange={() => toggleActive(feed.id, feed.is_active)}
+                  aria-label={feed.is_active === 1 ? "Pause feed" : "Resume feed"}
                 />
                 <Button
                   variant="ghost"
@@ -317,6 +324,7 @@ export default function FeedsSettingsPage() {
                   className="size-8 text-muted-foreground hover:text-destructive"
                   onClick={() => deleteFeed(feed.id)}
                   disabled={deletingId === feed.id}
+                  aria-label="Delete feed"
                 >
                   <Trash2 className="size-4" />
                 </Button>

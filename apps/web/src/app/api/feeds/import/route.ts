@@ -8,7 +8,20 @@ export async function POST(request: NextRequest) {
   return withAuth(request, async () => {
     try {
       const db = await getDb();
-      const xml = await request.text();
+
+      let xml: string;
+      const contentType = request.headers.get("content-type") ?? "";
+
+      if (contentType.includes("multipart/form-data")) {
+        const formData = await request.formData();
+        const file = formData.get("file");
+        if (!file || !(file instanceof File)) {
+          return jsonError("file field is required", "MISSING_FILE", 400);
+        }
+        xml = await file.text();
+      } else {
+        xml = await request.text();
+      }
 
       if (!xml.trim()) {
         return jsonError("OPML content is required", "MISSING_BODY", 400);

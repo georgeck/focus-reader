@@ -77,9 +77,9 @@ export default function SubscriptionsSettingsPage() {
   };
 
   const addTagToSub = async (subId: string, tagId: string) => {
-    await apiFetch(`/api/subscriptions/${subId}`, {
-      method: "PATCH",
-      body: JSON.stringify({ addTagId: tagId }),
+    await apiFetch(`/api/subscriptions/${subId}/tags`, {
+      method: "POST",
+      body: JSON.stringify({ tagId }),
     });
     mutate();
   };
@@ -141,6 +141,7 @@ export default function SubscriptionsSettingsPage() {
                       size="icon"
                       className="size-7"
                       onClick={() => saveRename(sub.id)}
+                      aria-label="Save name"
                     >
                       <Check className="size-3" />
                     </Button>
@@ -149,6 +150,7 @@ export default function SubscriptionsSettingsPage() {
                       size="icon"
                       className="size-7"
                       onClick={() => setEditingId(null)}
+                      aria-label="Cancel rename"
                     >
                       <X className="size-3" />
                     </Button>
@@ -163,6 +165,7 @@ export default function SubscriptionsSettingsPage() {
                       size="icon"
                       className="size-6 opacity-0 group-hover:opacity-100 hover:opacity-100"
                       onClick={() => startRename(sub.id, sub.display_name)}
+                      aria-label="Rename subscription"
                     >
                       <Pencil className="size-3" />
                     </Button>
@@ -199,6 +202,7 @@ export default function SubscriptionsSettingsPage() {
                       variant="ghost"
                       size="icon"
                       className="size-8 text-muted-foreground"
+                      aria-label="Manage tags"
                     >
                       <Tag className="size-4" />
                     </Button>
@@ -224,6 +228,7 @@ export default function SubscriptionsSettingsPage() {
                 <Switch
                   checked={sub.is_active === 1}
                   onCheckedChange={() => toggleActive(sub.id, sub.is_active)}
+                  aria-label={sub.is_active === 1 ? "Pause subscription" : "Resume subscription"}
                 />
                 <Button
                   variant="ghost"
@@ -231,6 +236,7 @@ export default function SubscriptionsSettingsPage() {
                   className="size-8 text-muted-foreground hover:text-destructive"
                   onClick={() => deleteSub(sub.id)}
                   disabled={deletingId === sub.id}
+                  aria-label="Delete subscription"
                 >
                   <Trash2 className="size-4" />
                 </Button>

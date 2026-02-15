@@ -17,6 +17,7 @@ const TYPE_OPTIONS: { label: string; value: DocumentType | null }[] = [
   { label: "Emails", value: "email" },
   { label: "RSS", value: "rss" },
   { label: "Bookmarks", value: "bookmark" },
+  { label: "PDFs", value: "pdf" },
 ];
 
 interface DocumentListToolbarProps {

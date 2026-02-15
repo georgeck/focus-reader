@@ -4,6 +4,8 @@ vi.mock("@focus-reader/db", () => ({
   listFeeds: vi.fn(),
   createFeed: vi.fn(),
   getFeedByUrl: vi.fn(),
+  getFeedByUrlIncludeDeleted: vi.fn(),
+  restoreFeed: vi.fn(),
   updateFeed: vi.fn(),
   softDeleteFeed: vi.fn(),
   hardDeleteFeed: vi.fn(),
@@ -23,6 +25,8 @@ const {
   listFeeds,
   createFeed,
   getFeedByUrl,
+  getFeedByUrlIncludeDeleted,
+  restoreFeed,
   updateFeed,
   softDeleteFeed,
   hardDeleteFeed,
@@ -66,6 +70,7 @@ describe("addFeed", () => {
     };
     vi.mocked(fetchFeed).mockResolvedValue(parsedFeed);
     vi.mocked(getFeedByUrl).mockResolvedValue(null);
+    vi.mocked(getFeedByUrlIncludeDeleted).mockResolvedValue(null);
     vi.mocked(createFeed).mockResolvedValue({
       id: "feed-1",
       feed_url: "https://myblog.com/feed.xml",
@@ -128,6 +133,7 @@ describe("addFeed", () => {
       "https://myblog.com/feed.xml"
     );
     vi.mocked(getFeedByUrl).mockResolvedValue(null);
+    vi.mocked(getFeedByUrlIncludeDeleted).mockResolvedValue(null);
     vi.mocked(createFeed).mockResolvedValue({
       id: "feed-2",
       feed_url: "https://myblog.com/feed.xml",
@@ -227,6 +233,9 @@ describe("importOpml", () => {
         deleted_at: null,
       })
       .mockResolvedValueOnce(null); // Blog C: new
+
+    // No soft-deleted feeds
+    vi.mocked(getFeedByUrlIncludeDeleted).mockResolvedValue(null);
 
     vi.mocked(createFeed).mockResolvedValue({
       id: "new-feed",

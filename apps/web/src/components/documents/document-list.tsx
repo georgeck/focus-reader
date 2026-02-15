@@ -181,6 +181,8 @@ export function DocumentList({
         total={displayTotal}
         onSearch={handleSearch}
         isSearchActive={isSearchActive}
+        onTypeFilter={setTypeFilter}
+        selectedType={typeFilter}
       />
       <div className="flex-1 overflow-y-auto">
         {displayDocuments.map((doc) => (
