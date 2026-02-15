@@ -134,6 +134,15 @@ mark {
   background-color: oklch(0.4 0.1 90);
 }
 
+/* Highlight pulse animation */
+@keyframes highlight-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.highlight-pulse {
+  animation: highlight-pulse 0.8s ease-in-out 2;
+}
+
 /* Hide scrollbar for carousel */
 .hide-scrollbar {
   -ms-overflow-style: none;

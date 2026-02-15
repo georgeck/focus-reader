@@ -1,13 +1,18 @@
 "use client";
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 import { useDocument, useDocumentContent } from "@/hooks/use-documents";
+import { useHighlightsForDocument } from "@/hooks/use-highlights";
 import { useApp } from "@/contexts/app-context";
 import { apiFetch } from "@/lib/api-client";
 import { formatDate } from "@/lib/format";
 import { extractDomain } from "@focus-reader/shared";
+import type { HighlightWithTags } from "@focus-reader/shared";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PdfViewer } from "./pdf-viewer";
+import { HighlightPopover } from "./highlight-popover";
+import { HighlightRenderer } from "./highlight-renderer";
+import { HighlightDetailPopover } from "./highlight-detail-popover";
 
 interface ReaderContentProps {
   documentId: string;
@@ -17,9 +22,15 @@ export function ReaderContent({ documentId }: ReaderContentProps) {
   const { document: doc, mutate } = useDocument(documentId);
   const { htmlContent, markdownContent, isLoading: contentLoading } =
     useDocumentContent(documentId);
+  const { highlights, mutate: mutateHighlights } = useHighlightsForDocument(documentId);
   const { contentMode } = useApp();
   const containerRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
   const progressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Highlight detail popover state
+  const [activeHighlight, setActiveHighlight] = useState<HighlightWithTags | null>(null);
+  const [detailPosition, setDetailPosition] = useState({ top: 0, left: 0 });
 
   // Auto-mark as read after 1.5s
   useEffect(() => {
@@ -62,6 +73,66 @@ export function ReaderContent({ documentId }: ReaderContentProps) {
     return () => el.removeEventListener("scroll", handleScroll);
   }, [handleScroll]);
 
+  const handleCreateHighlight = useCallback(
+    async (text: string, color: string, positionSelector: string | null, positionPercent: number, note?: string) => {
+      await apiFetch(`/api/documents/${documentId}/highlights`, {
+        method: "POST",
+        body: JSON.stringify({
+          text,
+          color,
+          position_selector: positionSelector,
+          position_percent: positionPercent,
+          note: note || null,
+        }),
+      });
+      mutateHighlights();
+    },
+    [documentId, mutateHighlights]
+  );
+
+  const handleHighlightClick = useCallback(
+    (highlightId: string, rect: DOMRect) => {
+      const h = highlights.find((hl) => hl.id === highlightId);
+      if (!h) return;
+      setActiveHighlight(h);
+      setDetailPosition({ top: rect.bottom + 8, left: rect.left + rect.width / 2 });
+    },
+    [highlights]
+  );
+
+  const handleUpdateColor = useCallback(
+    async (color: string) => {
+      if (!activeHighlight) return;
+      await apiFetch(`/api/highlights/${activeHighlight.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ color }),
+      });
+      mutateHighlights();
+      setActiveHighlight((prev) => (prev ? { ...prev, color } : null));
+    },
+    [activeHighlight, mutateHighlights]
+  );
+
+  const handleUpdateNote = useCallback(
+    async (note: string | null) => {
+      if (!activeHighlight) return;
+      await apiFetch(`/api/highlights/${activeHighlight.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ note }),
+      });
+      mutateHighlights();
+      setActiveHighlight((prev) => (prev ? { ...prev, note } : null));
+    },
+    [activeHighlight, mutateHighlights]
+  );
+
+  const handleDeleteHighlight = useCallback(async () => {
+    if (!activeHighlight) return;
+    await apiFetch(`/api/highlights/${activeHighlight.id}`, { method: "DELETE" });
+    setActiveHighlight(null);
+    mutateHighlights();
+  }, [activeHighlight, mutateHighlights]);
+
   if (!doc || contentLoading) {
     return (
       <div className="flex-1 overflow-y-auto">
@@ -88,7 +159,7 @@ export function ReaderContent({ documentId }: ReaderContentProps) {
     contentMode === "html" ? htmlContent : markdownContent;
 
   return (
-    <div ref={containerRef} className="flex-1 overflow-y-auto">
+    <div ref={containerRef} className="flex-1 overflow-y-auto relative">
       <article className="max-w-[680px] mx-auto px-6 py-8">
         {/* Source */}
         {domain && (
@@ -126,11 +197,12 @@ export function ReaderContent({ documentId }: ReaderContentProps) {
         {content ? (
           contentMode === "html" ? (
             <div
+              ref={contentRef}
               className="prose prose-slate max-w-none prose-headings:font-serif prose-headings:font-bold prose-p:leading-relaxed prose-a:text-primary prose-a:no-underline hover:prose-a:underline prose-img:rounded-lg prose-img:mx-auto prose-blockquote:border-l-primary prose-blockquote:not-italic"
               dangerouslySetInnerHTML={{ __html: content }}
             />
           ) : (
-            <div className="prose prose-slate max-w-none whitespace-pre-wrap">
+            <div ref={contentRef} className="prose prose-slate max-w-none whitespace-pre-wrap">
               {content}
             </div>
           )
@@ -138,6 +210,31 @@ export function ReaderContent({ documentId }: ReaderContentProps) {
           <p className="text-muted-foreground">No content available</p>
         )}
       </article>
+
+      {/* Highlight rendering */}
+      <HighlightRenderer
+        containerRef={contentRef}
+        highlights={highlights}
+        onHighlightClick={handleHighlightClick}
+      />
+
+      {/* Selection popover for creating highlights */}
+      <HighlightPopover
+        onCreateHighlight={handleCreateHighlight}
+        containerRef={containerRef}
+      />
+
+      {/* Detail popover for editing highlights */}
+      {activeHighlight && (
+        <HighlightDetailPopover
+          highlight={activeHighlight}
+          position={detailPosition}
+          onUpdateColor={handleUpdateColor}
+          onUpdateNote={handleUpdateNote}
+          onDelete={handleDeleteHighlight}
+          onClose={() => setActiveHighlight(null)}
+        />
+      )}
     </div>
   );
 }

@@ -192,6 +192,24 @@ export function AppShell({ children }: AppShellProps) {
       },
       // a — open add bookmark dialog
       a: () => setAddBookmarkOpen(true),
+      // h — create yellow highlight from selection
+      h: () => {
+        if (!isReadingView) return;
+        const selection = window.getSelection();
+        if (!selection || selection.isCollapsed) return;
+        const text = selection.toString().trim();
+        if (!text || !selectedDocId) return;
+        apiFetch(`/api/documents/${selectedDocId}/highlights`, {
+          method: "POST",
+          body: JSON.stringify({
+            text,
+            color: "#FFFF00",
+          }),
+        }).then(() => {
+          toast("Highlighted");
+          selection.removeAllRanges();
+        });
+      },
       // / — focus search input
       "/": () => {
         const searchInput = document.querySelector<HTMLInputElement>(
