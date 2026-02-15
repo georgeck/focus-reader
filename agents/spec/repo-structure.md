@@ -1,8 +1,8 @@
 # Repository Structure Specification: Focus Reader Monorepo
 
-**Version:** 1.1  
-**Date:** February 15, 2026  
-**Status:** Current implementation snapshot
+**Version:** 1.2
+**Date:** February 15, 2026
+**Status:** Current implementation snapshot (Phases 0–3 complete)
 
 ---
 
@@ -158,6 +158,7 @@ Important query modules include:
 
 - `documents`, `email-meta`, `pdf-meta`, `attachments`
 - `subscriptions`, `feeds`, `tags`, `highlights`
+- `collections`, `user-preferences`
 - `search`, `saved-views`, `api-keys`, `denylist`, `ingestion-log`
 
 Build/test:
@@ -176,6 +177,7 @@ Purpose:
 - RSS/Atom/JSON Feed fetch + OPML import/export
 - PDF metadata/text extraction helpers
 - HTML sanitization + HTML-to-Markdown conversion
+- Data export: YAML frontmatter generation, Markdown formatting for documents and highlights (`js-yaml`)
 
 Implementation note:
 
@@ -197,7 +199,8 @@ Purpose:
 Current modules include:
 
 - `documents`, `subscriptions`, `feeds`, `tags`
-- `highlights`, `search`, `saved-views`, `api-keys`
+- `highlights`, `collections`, `user-preferences`, `export`
+- `search`, `saved-views`, `api-keys`
 - `denylist`, `auth`
 
 Build/test:
@@ -223,22 +226,33 @@ Key config files:
 - `open-next.config.ts` enables R2 incremental cache override
 - `wrangler.toml` binds D1/R2 and `NEXT_INC_CACHE_R2_BUCKET`
 
+Notable runtime dependencies:
+
+- `@dnd-kit/core`, `@dnd-kit/sortable`, `@dnd-kit/utilities` — drag-and-drop for collection reordering
+- `jszip` — ZIP file generation for bulk Markdown export
+- `swr` — client-side data fetching with optimistic updates
+- `sonner` — toast notifications
+- Radix UI / shadcn/ui components for accessible UI primitives
+
 App route groups:
 
-- Reader views: `/inbox`, `/later`, `/archive`, `/all`, `/starred`
-- Filtered resource views: `/subscriptions/[id]`, `/feeds/[id]`, `/tags/[id]`, `/views/[id]`
-- Settings: `/settings/*` (email, subscriptions, feeds, denylist, API keys, ingestion log)
+- Reader views: `/inbox`, `/later`, `/archive`, `/all`, `/starred`, `/highlights`
+- Filtered resource views: `/subscriptions/[id]`, `/feeds/[id]`, `/tags/[id]`, `/views/[id]`, `/collections/[id]`
+- Settings: `/settings/*` (general + reading preferences, email, subscriptions, feeds, denylist, API keys, ingestion log, export)
 
-API route handlers currently implemented under `src/app/api`:
+API route handlers currently implemented under `src/app/api` (37 routes):
 
-- `documents`, `documents/upload`, `documents/[id]`, `documents/[id]/content`, `documents/[id]/tags`, `documents/[id]/highlights`
+- `documents`, `documents/upload`, `documents/[id]`, `documents/[id]/content`, `documents/[id]/tags`, `documents/[id]/highlights`, `documents/[id]/collections`, `documents/[id]/export`
 - `highlights`, `highlights/[id]`, `highlights/[id]/tags`
+- `collections`, `collections/[id]`, `collections/[id]/documents`, `collections/[id]/reorder`
 - `subscriptions`, `subscriptions/[id]`, `subscriptions/[id]/tags`
 - `feeds`, `feeds/[id]`, `feeds/[id]/tags`, `feeds/import`, `feeds/export`
 - `tags`, `tags/[id]`
 - `saved-views`, `saved-views/[id]`
 - `api-keys`, `api-keys/[id]`
 - `denylist`, `denylist/[id]`
+- `preferences`
+- `export/json`, `export/markdown`
 - `search`, `settings`, `ingestion-log`
 
 Testing:

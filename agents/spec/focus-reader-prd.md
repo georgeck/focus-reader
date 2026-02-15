@@ -917,7 +917,7 @@ Every API request must be authenticated. There are no unauthenticated endpoints 
 
 ## 7. Phased Rollout
 
-### Phase 0 — Email Ingestion Proof of Concept
+### Phase 0 — Email Ingestion Proof of Concept (COMPLETE)
 
 **Goal:** Validate that the email ingestion pipeline works end to end.
 
@@ -932,7 +932,7 @@ Every API request must be authenticated. There are no unauthenticated endpoints 
 
 **Success Criteria:** Emails from at least 3 different newsletter platforms are successfully received, parsed, and stored with clean HTML extraction.
 
-### Phase 1 — Minimal Viable Reader
+### Phase 1 — Minimal Viable Reader (COMPLETE)
 
 **Goal:** A functional reader for browsing saved newsletters and manually added articles.
 
@@ -951,7 +951,7 @@ Every API request must be authenticated. There are no unauthenticated endpoints 
 
 **Success Criteria:** User can subscribe to newsletters, save articles by URL, and read them entirely through the Focus Reader UI.
 
-### Phase 2 — RSS, Search, and Power Features
+### Phase 2 — RSS, Search, and Power Features (COMPLETE)
 
 **Goal:** A refined daily-driver reading experience with RSS and full-text search.
 
@@ -971,20 +971,19 @@ Every API request must be authenticated. There are no unauthenticated endpoints 
 
 **Success Criteria:** User has fully migrated all newsletters and RSS feeds to Focus Reader and uses it as their primary reading app.
 
-### Phase 3 — Polish and Advanced Features
+### Phase 3 — Polish and Advanced Features (COMPLETE)
 
 **Goal:** Feature parity with commercial readers for power users.
 
 **Deliverables:**
 
-- Highlighting and annotation system.
-- Highlight tags and notes.
-- Notebook view (all highlights for a document).
-- Collections (reading lists).
-- Command palette (`Cmd+K`).
-- Full data export (JSON, Markdown highlights).
-- Reading progress tracking and sync.
-- Customizable reading preferences (font, size, width, line height).
+- Highlighting and annotation system (text selection, 5 colors, notes, position anchoring).
+- Highlight tags and notes (separate from document tags).
+- Notebook view (all highlights for a document in right sidebar + global highlights page).
+- Collections (reading lists with drag-and-drop reordering via @dnd-kit).
+- Command palette (`Cmd+K`) with Phase 3 commands (Create Collection, Go to Highlights, Export Data).
+- Full data export (JSON download, single-doc Markdown with YAML frontmatter, bulk ZIP, highlights Markdown, copy-as-Markdown).
+- Customizable reading preferences (font family, font size, line height, content width — stored in user_preferences table).
 
 **Success Criteria:** User has fully replaced Readwise Reader with Focus Reader for daily use.
 

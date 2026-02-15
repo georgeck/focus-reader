@@ -6,7 +6,7 @@ This document contains everything an AI agent needs to work effectively on the F
 
 Focus Reader is a self-hosted read-it-later app deployed on Cloudflare (Workers, D1, R2, Pages). It ingests content from email newsletters, web articles, RSS feeds, and bookmarks into a unified reading interface.
 
-**Current state:** Phase 0 (email ingestion) and Phase 1 (API + web UI) complete. Phase 2 (RSS, search, highlights) is next. See `agents/plans/phase-1-implementation-gaps.md` for remaining Phase 1 gaps deferred to Phase 2.
+**Current state:** Phases 0–3 complete. Phase 0 (email ingestion), Phase 1 (API + web UI), Phase 2 (RSS, search, extension, auth, saved views, PDF), and Phase 3 (highlighting, collections, preferences, export) are all implemented. See `agents/plans/phase-3-plan.md` for Phase 3 details.
 
 ### Specification Documents
 
@@ -18,7 +18,9 @@ Detailed specs live in `agents/spec/` and implementation plans in `agents/plans/
 - `agents/spec/improvements.md` — Design improvements and open questions
 - `agents/plans/phase-0-plan.md` — Phase 0 implementation plan (completed)
 - `agents/plans/phase-1-plan.md` — Phase 1 implementation plan (completed)
-- `agents/plans/phase-1-implementation-gaps.md` — Phase 1 gap tracker (open gaps deferred to Phase 2)
+- `agents/plans/phase-1-implementation-gaps.md` — Phase 1 gap tracker (gaps resolved in Phase 2)
+- `agents/plans/phase-2-plan.md` — Phase 2 implementation plan (completed)
+- `agents/plans/phase-3-plan.md` — Phase 3 implementation plan (completed)
 
 **Always read the relevant spec before implementing a feature.** The specs define entity schemas, validation rules, and edge cases.
 
@@ -29,11 +31,13 @@ focus-reader/
 ├── packages/
 │   ├── shared/          # Types, constants, utilities (no deps)
 │   ├── db/              # D1 migrations, typed query helpers
-│   ├── parser/          # Email parsing, HTML sanitization, Markdown conversion
-│   └── api/             # REST API business logic (documents, subscriptions, tags, denylist)
+│   ├── parser/          # Email/article/RSS/PDF parsing, sanitization, export
+│   └── api/             # REST API business logic (all entities)
 ├── apps/
+│   ├── web/             # Next.js 15 frontend on Cloudflare Pages
 │   ├── email-worker/    # Cloudflare Email Worker
-│   └── web/             # Next.js 15 frontend on Cloudflare Pages
+│   ├── rss-worker/      # Cloudflare Worker (scheduled RSS polling)
+│   └── extension/       # Browser extension (WXT + React)
 ├── scripts/
 │   ├── sync-secrets.sh  # Propagate .dev.vars across workspaces
 │   └── ingest-local.ts  # Local .eml testing helper
@@ -45,9 +49,13 @@ focus-reader/
 ### Dependency Graph
 
 ```
-shared ← db ← api ← email-worker
-shared ← parser ←───┘       ↑
-shared ← db ←───────────────┘
+shared ← db ← api ← web
+shared ← parser ←───┘
+shared ← db ← email-worker
+shared ← parser ← email-worker
+shared ← db ← rss-worker
+shared ← parser ← rss-worker
+extension (HTTP client to web API; no internal package deps)
 ```
 
 - `shared` has zero external dependencies
@@ -55,7 +63,9 @@ shared ← db ←───────────────┘
 - `parser` depends on `shared`
 - `api` depends on `shared`, `db`, `parser`
 - `email-worker` depends on `shared`, `db`, `parser`
+- `rss-worker` depends on `shared`, `db`, `parser`
 - `web` depends on `shared`, `db`, `parser`, `api`
+- `extension` calls the web API over HTTP (no workspace package deps)
 
 ## Build & Test Commands
 
@@ -174,8 +184,12 @@ Uses **turndown** with linkedom for DOM parsing (turndown needs a `document` to 
 |----------------|--------------------------------------------|-------------------|
 | `shared`       | vitest                                     | Node.js           |
 | `parser`       | vitest                                     | Node.js           |
+| `api`          | vitest                                     | Node.js           |
 | `db`           | vitest + `@cloudflare/vitest-pool-workers` | workerd (D1)      |
+| `web`          | vitest                                     | Node.js           |
 | `email-worker` | vitest + `@cloudflare/vitest-pool-workers` | workerd (D1 + R2) |
+| `rss-worker`   | vitest + `@cloudflare/vitest-pool-workers` | workerd (D1)      |
+| `extension`    | vitest                                     | Node.js           |
 
 ### Version Constraints
 
@@ -262,27 +276,58 @@ app/
 │   ├── archive/page.tsx
 │   ├── all/page.tsx
 │   ├── starred/page.tsx
+│   ├── highlights/page.tsx     # Global highlights view
 │   ├── subscriptions/[id]/page.tsx
-│   └── tags/[id]/page.tsx
+│   ├── tags/[id]/page.tsx
+│   ├── feeds/[id]/page.tsx
+│   ├── views/[id]/page.tsx     # Saved view (query-based filter)
+│   └── collections/[id]/page.tsx # Collection detail with drag-and-drop
 ├── settings/                   # Settings layout group
 │   ├── layout.tsx
-│   ├── page.tsx                # General (theme toggle)
+│   ├── page.tsx                # General (theme, reading preferences)
 │   ├── subscriptions/page.tsx
+│   ├── feeds/page.tsx
 │   ├── denylist/page.tsx
 │   ├── email/page.tsx          # Email domain display
-│   └── ingestion-log/page.tsx  # Recent ingestion events table
-└── api/                        # Next.js Route Handlers
+│   ├── api-keys/page.tsx
+│   ├── ingestion-log/page.tsx  # Recent ingestion events table
+│   └── export/page.tsx         # Data export (JSON, Markdown, ZIP)
+└── api/                        # Next.js Route Handlers (37 routes)
     ├── documents/              # GET (list), POST (create bookmark)
+    ├── documents/upload/       # POST (PDF upload)
     ├── documents/[id]/         # GET, PATCH, DELETE
     ├── documents/[id]/content/ # GET (HTML/markdown from R2)
     ├── documents/[id]/tags/    # POST, DELETE (tag/untag document)
+    ├── documents/[id]/highlights/ # GET, POST (document highlights)
+    ├── documents/[id]/collections/ # GET (document's collections)
+    ├── documents/[id]/export/  # GET (single doc markdown export)
+    ├── highlights/             # GET (all highlights, paginated)
+    ├── highlights/[id]/        # PATCH, DELETE
+    ├── highlights/[id]/tags/   # POST, DELETE (tag/untag highlight)
+    ├── collections/            # GET, POST
+    ├── collections/[id]/       # GET, PATCH, DELETE
+    ├── collections/[id]/documents/ # POST, DELETE (add/remove docs)
+    ├── collections/[id]/reorder/ # PATCH (reorder documents)
     ├── subscriptions/          # GET, POST (create subscription)
     ├── subscriptions/[id]/     # PATCH, DELETE (?hard=true for cascade)
     ├── subscriptions/[id]/tags/ # POST, DELETE (tag/untag subscription)
+    ├── feeds/                  # GET, POST
+    ├── feeds/import/           # POST (OPML import)
+    ├── feeds/export/           # GET (OPML export)
+    ├── feeds/[id]/             # GET, PATCH, DELETE
+    ├── feeds/[id]/tags/        # POST, DELETE (tag/untag feed)
     ├── tags/                   # GET, POST
     ├── tags/[id]/              # PATCH, DELETE
+    ├── saved-views/            # GET, POST
+    ├── saved-views/[id]/       # GET, PATCH, DELETE
+    ├── api-keys/               # GET, POST
+    ├── api-keys/[id]/          # DELETE
     ├── denylist/               # GET, POST
     ├── denylist/[id]/          # DELETE
+    ├── search/                 # GET (FTS5 full-text search)
+    ├── preferences/            # GET, PATCH (reading preferences)
+    ├── export/json/            # GET (full JSON export download)
+    ├── export/markdown/        # GET (bulk markdown ZIP or highlights)
     ├── settings/               # GET (returns emailDomain)
     └── ingestion-log/          # GET (recent ingestion events)
 ```
@@ -290,11 +335,16 @@ app/
 ### Key Patterns
 
 - **Two-mode layout:** `AppShell` switches between Library View (sidebar + document list + right panel) and Reading View (TOC + content + right panel) based on `?doc=` search param
-- **API routes** use `getDb()`/`getR2()` from `src/lib/bindings.ts` to access Cloudflare D1/R2 bindings, then call into `@focus-reader/api` business logic
+- **API routes** use `getDb()`/`getR2()` from `src/lib/bindings.ts` to access Cloudflare D1/R2 bindings, then call into `@focus-reader/api` business logic. All routes wrapped in `withAuth()` middleware
 - **Client API calls** go through `apiFetch()` from `src/lib/api-client.ts` which handles JSON headers and error wrapping (`ApiClientError`)
 - **Keyboard shortcuts** registered via `useKeyboardShortcuts` hook; respects input focus (disabled in inputs/textareas)
+- **Command palette** (`Cmd+K`) with navigation, actions (add URL, create collection, highlights, export), and settings commands
 - **Article extraction** for bookmarks uses `@mozilla/readability` + linkedom in `packages/parser/src/article.ts`
-- **No auth** in Phase 1 (single-user app). Auth middleware planned for Phase 2+
+- **Authentication:** Cloudflare Access JWT + API key (`Authorization: Bearer <key>`) on all routes
+- **Highlighting:** Text selection creates highlights with colors; highlights support notes and tags; notebook view in right sidebar; global highlights page
+- **Collections:** Curated reading lists with drag-and-drop reordering (`@dnd-kit`); accessible from sidebar and command palette
+- **Reading preferences:** Configurable font family, size, line height, content width; stored in `user_preferences` table; applied via dynamic inline styles
+- **Data export:** Full JSON, single-document Markdown with YAML frontmatter, bulk ZIP, highlights Markdown, copy-as-Markdown
 
 ### Cloudflare Bindings (Web)
 
