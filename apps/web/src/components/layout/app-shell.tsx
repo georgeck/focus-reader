@@ -17,6 +17,8 @@ import { KeyboardShortcutsDialog } from "@/components/dialogs/keyboard-shortcuts
 import { AddBookmarkDialog } from "@/components/dialogs/add-bookmark-dialog";
 import { TagManagerDialog } from "@/components/dialogs/tag-manager-dialog";
 import { CommandPalette } from "@/components/dialogs/command-palette";
+import { CollectionDialog } from "@/components/dialogs/collection-dialog";
+import { useCollections } from "@/hooks/use-collections";
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -49,6 +51,8 @@ export function AppShell({ children }: AppShellProps) {
   const [addBookmarkOpen, setAddBookmarkOpen] = useState(false);
   const [tagManagerOpen, setTagManagerOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [collectionDialogOpen, setCollectionDialogOpen] = useState(false);
+  const { mutate: mutateCollections } = useCollections();
 
   const patchDoc = useCallback(
     async (updates: Record<string, unknown>) => {
@@ -282,7 +286,13 @@ export function AppShell({ children }: AppShellProps) {
         open={commandPaletteOpen}
         onOpenChange={setCommandPaletteOpen}
         onAddBookmark={() => setAddBookmarkOpen(true)}
+        onCreateCollection={() => setCollectionDialogOpen(true)}
         onShowShortcuts={() => setShortcutsOpen(true)}
+      />
+      <CollectionDialog
+        open={collectionDialogOpen}
+        onOpenChange={setCollectionDialogOpen}
+        onSaved={() => mutateCollections()}
       />
     </div>
   );

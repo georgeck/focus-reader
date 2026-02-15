@@ -45,7 +45,7 @@ export function CollectionDialog({
   }, [open, collection]);
 
   const handleSave = async () => {
-    if (!name.trim()) return;
+    if (!name.trim() || name.trim().length > 100) return;
     setSaving(true);
     try {
       if (isEditing) {
@@ -77,15 +77,21 @@ export function CollectionDialog({
           <DialogTitle>{isEditing ? "Edit Collection" : "New Collection"}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-2">
-          <Input
-            placeholder="Collection name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleSave();
-            }}
-            autoFocus
-          />
+          <div>
+            <Input
+              placeholder="Collection name"
+              value={name}
+              onChange={(e) => setName(e.target.value.slice(0, 100))}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleSave();
+              }}
+              autoFocus
+              maxLength={100}
+            />
+            {name.length >= 90 && (
+              <p className="text-xs text-muted-foreground mt-1">{name.length}/100</p>
+            )}
+          </div>
           <Input
             placeholder="Description (optional)"
             value={description}

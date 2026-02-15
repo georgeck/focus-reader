@@ -25,12 +25,16 @@ import {
   Maximize2,
   Search,
   Keyboard,
+  FolderPlus,
+  Download,
+  Highlighter,
 } from "lucide-react";
 
 interface CommandPaletteProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onAddBookmark: () => void;
+  onCreateCollection?: () => void;
   onShowShortcuts?: () => void;
 }
 
@@ -38,6 +42,7 @@ export function CommandPalette({
   open,
   onOpenChange,
   onAddBookmark,
+  onCreateCollection,
   onShowShortcuts,
 }: CommandPaletteProps) {
   const router = useRouter();
@@ -96,6 +101,16 @@ export function CommandPalette({
             Add URL
             <CommandShortcut>A</CommandShortcut>
           </CommandItem>
+          {onCreateCollection && (
+            <CommandItem onSelect={() => runCommand(onCreateCollection)}>
+              <FolderPlus className="mr-2" />
+              Create Collection
+            </CommandItem>
+          )}
+          <CommandItem onSelect={() => runCommand(() => router.push("/highlights"))}>
+            <Highlighter className="mr-2" />
+            Go to Highlights
+          </CommandItem>
           <CommandItem onSelect={() => runCommand(toggleFocusMode)}>
             <Maximize2 className="mr-2" />
             Toggle Focus Mode
@@ -112,6 +127,10 @@ export function CommandPalette({
           >
             {theme === "dark" ? <Sun className="mr-2" /> : <Moon className="mr-2" />}
             Toggle Theme
+          </CommandItem>
+          <CommandItem onSelect={() => runCommand(() => router.push("/settings/export"))}>
+            <Download className="mr-2" />
+            Export Data
           </CommandItem>
         </CommandGroup>
         <CommandGroup heading="Settings">
