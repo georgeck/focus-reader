@@ -7,7 +7,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ChevronDown, Filter, PanelLeftOpen } from "lucide-react";
+import { ChevronDown, Filter, PanelLeftOpen, PanelRightOpen } from "lucide-react";
 import { SearchBar } from "@/components/search/search-bar";
 import { useApp } from "@/contexts/app-context";
 import type { DocumentType } from "@focus-reader/shared";
@@ -31,7 +31,7 @@ interface DocumentListToolbarProps {
 }
 
 export function DocumentListToolbar({ title, total, onSearch, isSearchActive, onTypeFilter, selectedType }: DocumentListToolbarProps) {
-  const { sidebarCollapsed, toggleSidebar } = useApp();
+  const { sidebarCollapsed, toggleSidebar, rightPanelVisible, toggleRightPanel } = useApp();
   const typeLabel = TYPE_OPTIONS.find((o) => o.value === (selectedType ?? null))?.label ?? "All Types";
 
   return (
@@ -82,6 +82,11 @@ export function DocumentListToolbar({ title, total, onSearch, isSearchActive, on
               <DropdownMenuItem>Reading time</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+        )}
+        {!rightPanelVisible && (
+          <Button variant="ghost" size="icon" className="size-7" onClick={toggleRightPanel}>
+            <PanelRightOpen className="size-4" />
+          </Button>
         )}
       </div>
     </div>

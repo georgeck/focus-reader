@@ -5,7 +5,7 @@ import { useHighlights } from "@/hooks/use-highlights";
 import { useTags } from "@/hooks/use-tags";
 import { useRouter, usePathname } from "next/navigation";
 import { HIGHLIGHT_COLORS } from "@focus-reader/shared";
-import { Highlighter, PanelLeftOpen } from "lucide-react";
+import { Highlighter, PanelLeftOpen, PanelRightOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useApp } from "@/contexts/app-context";
 import { timeAgo } from "@/lib/format";
@@ -13,7 +13,7 @@ import { timeAgo } from "@/lib/format";
 export default function HighlightsPage() {
   const router = useRouter();
   const pathname = usePathname();
-  const { sidebarCollapsed, toggleSidebar } = useApp();
+  const { sidebarCollapsed, toggleSidebar, rightPanelVisible, toggleRightPanel } = useApp();
   const { tags } = useTags();
   const [colorFilter, setColorFilter] = useState<string | undefined>();
   const [tagFilter, setTagFilter] = useState<string | undefined>();
@@ -53,6 +53,11 @@ export default function HighlightsPage() {
           <h1 className="text-lg font-semibold">Highlights</h1>
           <span className="text-sm text-muted-foreground">({total})</span>
         </div>
+        {!rightPanelVisible && (
+          <Button variant="ghost" size="icon" className="size-7" onClick={toggleRightPanel}>
+            <PanelRightOpen className="size-4" />
+          </Button>
+        )}
       </div>
 
       {/* Filters */}

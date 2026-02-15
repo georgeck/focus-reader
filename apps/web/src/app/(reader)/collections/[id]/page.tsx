@@ -23,7 +23,7 @@ import { CollectionDialog } from "@/components/dialogs/collection-dialog";
 import { apiFetch } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { useApp } from "@/contexts/app-context";
-import { Pencil, Trash2, FolderOpen, PanelLeftOpen } from "lucide-react";
+import { Pencil, Trash2, FolderOpen, PanelLeftOpen, PanelRightOpen } from "lucide-react";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -35,7 +35,7 @@ export default function CollectionPage({
   const { id } = use(params);
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { sidebarCollapsed, toggleSidebar } = useApp();
+  const { sidebarCollapsed, toggleSidebar, rightPanelVisible, toggleRightPanel } = useApp();
   const { collection, isLoading, mutate } = useCollection(id);
   const { mutate: mutateList } = useCollections();
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -167,6 +167,11 @@ export default function CollectionPage({
         >
           <Trash2 className="size-4" />
         </Button>
+        {!rightPanelVisible && (
+          <Button variant="ghost" size="icon" className="size-7" onClick={toggleRightPanel}>
+            <PanelRightOpen className="size-4" />
+          </Button>
+        )}
       </div>
 
       {/* Document list with drag-and-drop */}

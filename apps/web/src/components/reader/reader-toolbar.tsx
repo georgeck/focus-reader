@@ -32,6 +32,7 @@ import {
   MailWarning,
   FolderPlus,
   FileText,
+  PanelRightOpen,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useApp } from "@/contexts/app-context";
@@ -51,6 +52,8 @@ export function ReaderToolbar({ documentId }: ReaderToolbarProps) {
     toggleToc,
     focusMode,
     toggleFocusMode,
+    rightPanelVisible,
+    toggleRightPanel,
     documentIds,
     currentDocumentIndex,
     setCurrentDocumentIndex,
@@ -267,6 +270,11 @@ export function ReaderToolbar({ documentId }: ReaderToolbarProps) {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        {!rightPanelVisible && !focusMode && (
+          <Button variant="ghost" size="icon" className="size-8" onClick={toggleRightPanel}>
+            <PanelRightOpen className="size-4" />
+          </Button>
+        )}
       </div>
 
       {/* Confirmation email banner */}
