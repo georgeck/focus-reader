@@ -13,6 +13,11 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from "@/components/ui/tooltip";
 import { Type, Minus, Plus, RotateCcw } from "lucide-react";
 
 export function ReaderPreferencesPopover() {
@@ -44,11 +49,16 @@ export function ReaderPreferencesPopover() {
 
   return (
     <Popover>
-      <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" className="size-8">
-          <Type className="size-4" />
-        </Button>
-      </PopoverTrigger>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <PopoverTrigger asChild>
+            <Button variant="ghost" size="icon" className="size-8">
+              <Type className="size-4" />
+            </Button>
+          </PopoverTrigger>
+        </TooltipTrigger>
+        <TooltipContent>Reading preferences</TooltipContent>
+      </Tooltip>
       <PopoverContent className="w-64" align="end">
         <div className="space-y-4">
           {/* Font family */}

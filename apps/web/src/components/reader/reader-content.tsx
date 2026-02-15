@@ -208,11 +208,11 @@ export function ReaderContent({ documentId }: ReaderContentProps) {
           contentMode === "html" ? (
             <div
               ref={contentRef}
-              className="prose prose-slate max-w-none prose-headings:font-serif prose-headings:font-bold prose-p:leading-relaxed prose-a:text-primary prose-a:no-underline hover:prose-a:underline prose-img:rounded-lg prose-img:mx-auto prose-blockquote:border-l-primary prose-blockquote:not-italic"
+              className="prose prose-slate dark:prose-invert max-w-none prose-headings:font-serif prose-headings:font-bold prose-p:leading-relaxed prose-a:text-primary prose-a:no-underline hover:prose-a:underline prose-img:rounded-lg prose-img:mx-auto prose-blockquote:border-l-primary prose-blockquote:not-italic"
               dangerouslySetInnerHTML={{ __html: content }}
             />
           ) : (
-            <div ref={contentRef} className="prose prose-slate max-w-none whitespace-pre-wrap">
+            <div ref={contentRef} className="prose prose-slate dark:prose-invert max-w-none whitespace-pre-wrap">
               {content}
             </div>
           )

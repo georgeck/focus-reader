@@ -121,6 +121,35 @@
   body {
     @apply bg-background text-foreground;
   }
+
+  /* Subtle scrollbar styling */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: oklch(0.5 0 0 / 0.3) transparent;
+  }
+  .dark * {
+    scrollbar-color: oklch(0.6 0 0 / 0.2) transparent;
+  }
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: oklch(0.5 0 0 / 0.3);
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: oklch(0.5 0 0 / 0.5);
+  }
+  .dark ::-webkit-scrollbar-thumb {
+    background: oklch(0.6 0 0 / 0.2);
+  }
+  .dark ::-webkit-scrollbar-thumb:hover {
+    background: oklch(0.6 0 0 / 0.35);
+  }
 }
 
 /* Search snippet highlights */

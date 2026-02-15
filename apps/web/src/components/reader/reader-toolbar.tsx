@@ -35,6 +35,11 @@ import {
   PanelRightOpen,
 } from "lucide-react";
 import { toast } from "sonner";
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from "@/components/ui/tooltip";
 import { useApp } from "@/contexts/app-context";
 import { AddToCollectionDialog } from "@/components/dialogs/add-to-collection-dialog";
 import { ReaderPreferencesPopover } from "./reader-preferences-popover";
@@ -151,33 +156,58 @@ export function ReaderToolbar({ documentId }: ReaderToolbarProps) {
       )}
       <div className="flex items-center h-12 px-3 border-b bg-background gap-1">
         {/* Left group */}
-        <Button variant="ghost" size="icon" className="size-8" onClick={goBack}>
-          <ArrowLeft className="size-4" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="size-8"
-          disabled={!hasPrev}
-          onClick={() => navigateDoc(currentDocumentIndex - 1)}
-        >
-          <ChevronUp className="size-4" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="size-8"
-          disabled={!hasNext}
-          onClick={() => navigateDoc(currentDocumentIndex + 1)}
-        >
-          <ChevronDown className="size-4" />
-        </Button>
-        <Button variant="ghost" size="icon" className="size-8" onClick={toggleToc}>
-          <PanelLeft className="size-4" />
-        </Button>
-        <Button variant="ghost" size="icon" className="size-8" onClick={toggleFocusMode}>
-          {focusMode ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button variant="ghost" size="icon" className="size-8" onClick={goBack}>
+              <ArrowLeft className="size-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Back</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-8"
+              disabled={!hasPrev}
+              onClick={() => navigateDoc(currentDocumentIndex - 1)}
+            >
+              <ChevronUp className="size-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Previous document</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-8"
+              disabled={!hasNext}
+              onClick={() => navigateDoc(currentDocumentIndex + 1)}
+            >
+              <ChevronDown className="size-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Next document</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button variant="ghost" size="icon" className="size-8" onClick={toggleToc}>
+              <PanelLeft className="size-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Table of contents</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button variant="ghost" size="icon" className="size-8" onClick={toggleFocusMode}>
+              {focusMode ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Focus mode</TooltipContent>
+        </Tooltip>
 
         <ReaderPreferencesPopover />
 
@@ -185,47 +215,67 @@ export function ReaderToolbar({ documentId }: ReaderToolbarProps) {
         <div className="flex-1" />
 
         {/* Right group */}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="size-8"
-          onClick={toggleStar}
-        >
-          <Star
-            className={
-              doc?.is_starred === 1
-                ? "size-4 text-amber-400 fill-amber-400"
-                : "size-4"
-            }
-          />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="size-8"
-          onClick={toggleRead}
-        >
-          {doc?.is_read === 1 ? (
-            <BookX className="size-4" />
-          ) : (
-            <BookOpen className="size-4" />
-          )}
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="size-8"
-          onClick={() => moveToLocation("archive")}
-        >
-          <Archive className="size-4" />
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-8"
+              onClick={toggleStar}
+            >
+              <Star
+                className={
+                  doc?.is_starred === 1
+                    ? "size-4 text-amber-400 fill-amber-400"
+                    : "size-4"
+                }
+              />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{doc?.is_starred === 1 ? "Unstar" : "Star"}</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-8"
+              onClick={toggleRead}
+            >
+              {doc?.is_read === 1 ? (
+                <BookX className="size-4" />
+              ) : (
+                <BookOpen className="size-4" />
+              )}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{doc?.is_read === 1 ? "Mark as unread" : "Mark as read"}</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-8"
+              onClick={() => moveToLocation("archive")}
+            >
+              <Archive className="size-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Archive</TooltipContent>
+        </Tooltip>
 
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="size-8">
-              <MoreHorizontal className="size-4" />
-            </Button>
-          </DropdownMenuTrigger>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="size-8">
+                  <MoreHorizontal className="size-4" />
+                </Button>
+              </DropdownMenuTrigger>
+            </TooltipTrigger>
+            <TooltipContent>More actions</TooltipContent>
+          </Tooltip>
           <DropdownMenuContent align="end">
             <DropdownMenuItem onClick={() => moveToLocation("inbox")}>
               <Inbox className="size-4 mr-2" /> Move to Inbox
@@ -271,9 +321,14 @@ export function ReaderToolbar({ documentId }: ReaderToolbarProps) {
           </DropdownMenuContent>
         </DropdownMenu>
         {!rightPanelVisible && !focusMode && (
-          <Button variant="ghost" size="icon" className="size-8" onClick={toggleRightPanel}>
-            <PanelRightOpen className="size-4" />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon" className="size-8" onClick={toggleRightPanel}>
+                <PanelRightOpen className="size-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Show side panel</TooltipContent>
+          </Tooltip>
         )}
       </div>
 
