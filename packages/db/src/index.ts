@@ -11,3 +11,5 @@ export * from "./queries/search.js";
 export * from "./queries/api-keys.js";
 export * from "./queries/pdf-meta.js";
 export * from "./queries/saved-views.js";
+export * from "./queries/highlights.js";
+export * from "./queries/collections.js";

@@ -1,74 +1,64 @@
 # Repository Structure Specification: Focus Reader Monorepo
 
-**Version:** 1.0
-**Date:** February 13, 2026
-**Status:** Draft
+**Version:** 1.1  
+**Date:** February 15, 2026  
+**Status:** Current implementation snapshot
 
 ---
 
 ## 1. Overview
 
-This document specifies the monorepo structure for Focus Reader, a self-hosted read-it-later application deployed on Cloudflare's platform. The repository uses **PNPM workspaces** for dependency management and **Turborepo** for task orchestration.
+This document describes the repository structure that is currently implemented in `focus-reader/`.
 
-### 1.1 Why a Monorepo
+Focus Reader is a PNPM workspace monorepo with Turborepo task orchestration. It contains:
 
-Focus Reader comprises multiple deployable units (Next.js web app, Email Worker, RSS Worker, browser extension) that share significant code: database schema, content parsing, HTML sanitization, API business logic, and TypeScript types. A monorepo ensures:
+- Shared TypeScript packages for data model, parsing, DB access, and business logic
+- Deployable Cloudflare apps (web app, email worker, RSS worker)
+- A browser extension app (WXT)
+- Agent/spec/planning documentation under `agents/`
 
-- **Single source of truth** for shared logic — no version drift between packages.
-- **Atomic changes** — a schema migration and its corresponding query/UI changes land in one commit.
-- **Simplified CI/CD** — one pipeline builds, tests, and deploys all affected apps.
+### 1.1 Why this structure
 
-### 1.2 Why PNPM Workspaces
+The monorepo enables:
 
-- **Strict dependency isolation:** PNPM's non-flat `node_modules` structure prevents phantom dependencies — packages can only import what they explicitly declare in their `package.json`. This catches missing dependency declarations before deployment.
-- **Efficient storage:** Content-addressable store with hard links means shared dependencies (e.g., `typescript`, `wrangler`) are stored once on disk regardless of how many workspaces use them.
-- **Workspace protocol:** Internal packages reference each other via `"workspace:*"`, which PNPM resolves to the local source. No `npm link` hacks or manual version bumping.
-- **Turborepo compatibility:** Turborepo natively understands PNPM workspaces for dependency graph resolution and task scheduling.
-
-### 1.3 Why Turborepo
-
-- **Task orchestration:** Builds packages in dependency order (e.g., `@focus-reader/shared` before `@focus-reader/db` before `apps/web`).
-- **Remote caching:** Cached build artifacts avoid redundant work in CI and across developers.
-- **Parallel execution:** Independent tasks (e.g., linting `apps/web` and `apps/email-worker`) run concurrently.
-- **Lightweight:** Minimal configuration compared to Nx. Well-suited to the TypeScript/Cloudflare ecosystem.
+- Atomic changes across schema, query helpers, API logic, and UI
+- Shared runtime logic across workers and web API routes
+- Single install/build/test workflow for all workspaces
 
 ---
 
-## 2. Directory Layout
+## 2. Current Directory Layout
 
-```
+```text
 focus-reader/
 ├── apps/
-│   ├── web/                        # Next.js app on Cloudflare Pages
-│   ├── email-worker/               # Cloudflare Email Worker
-│   ├── rss-worker/                 # Cloudflare Worker (Cron Triggers)
-│   └── extension/                  # Browser extension (Chrome, Firefox, Safari)
+│   ├── web/                    # Next.js 15 app deployed via OpenNext Cloudflare
+│   ├── email-worker/           # Cloudflare Email Worker (inbound email ingestion)
+│   ├── rss-worker/             # Cloudflare Worker (scheduled RSS polling)
+│   └── extension/              # Browser extension (WXT + React)
 ├── packages/
-│   ├── shared/                     # Common types, constants, utilities
-│   ├── db/                         # D1 schema, migrations, query helpers
-│   ├── parser/                     # Content parsing & sanitization
-│   └── api/                        # Shared API route handlers / business logic
+│   ├── shared/                 # Types, constants, utility helpers
+│   ├── db/                     # D1 migrations + typed query helpers
+│   ├── parser/                 # Email/article/RSS/PDF parsing + sanitization
+│   └── api/                    # Business logic used by web API routes
+├── scripts/
+│   ├── ingest-local.ts         # Local .eml ingestion harness (Miniflare)
+│   └── sync-secrets.sh         # Writes shared env vars into app .dev.vars files
 ├── agents/
-│   └── spec/                       # PRD and specification documents
+│   ├── spec/
+│   └── plans/
+├── package.json
 ├── pnpm-workspace.yaml
-├── package.json                    # Root workspace config
-├── turbo.json                      # Turborepo pipeline config
-├── tsconfig.base.json              # Shared TypeScript compiler options
-├── .npmrc                          # PNPM configuration
-├── .gitignore
-├── .github/
-│   └── workflows/
-│       └── deploy.yml              # CI/CD pipeline
-└── LICENSE
+├── turbo.json
+├── tsconfig.base.json
+└── .npmrc
 ```
 
 ---
 
-## 3. Root Configuration Files
+## 3. Root Workspace Configuration
 
 ### 3.1 `pnpm-workspace.yaml`
-
-Defines which directories are workspaces.
 
 ```yaml
 packages:
@@ -76,552 +66,400 @@ packages:
   - "packages/*"
 ```
 
-### 3.2 `.npmrc`
+### 3.2 Root `package.json`
 
-PNPM-specific settings.
+Current root scripts:
 
-```ini
-# Enforce strict peer dependency resolution
-strict-peer-dependencies=true
-
-# Hoist only tooling binaries needed at the root (turbo, prettier, eslint)
-# Prevent phantom dependency access in workspace packages
-shamefully-hoist=false
-
-# Prefer frozen lockfile in CI
-frozen-lockfile=true
-```
-
-### 3.3 Root `package.json`
-
-The root `package.json` defines workspace-wide scripts and shared dev dependencies. It does not contain application code.
-
-```jsonc
+```json
 {
-  "name": "focus-reader",
-  "private": true,
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
     "test": "turbo run test",
-    "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
-    "db:migrate": "turbo run db:migrate --filter=@focus-reader/db",
-    "clean": "turbo run clean"
-  },
-  "devDependencies": {
-    "turbo": "^2.x",
-    "typescript": "^5.x",
-    "prettier": "^3.x",
-    "eslint": "^9.x"
-  },
-  "packageManager": "pnpm@9.x.x",
-  "engines": {
-    "node": ">=20.0.0"
+    "db:migrate": "pnpm --filter @focus-reader/db run migrate",
+    "clean": "turbo run clean && rm -rf node_modules"
   }
 }
 ```
 
-### 3.4 `turbo.json`
+Other important root settings:
 
-Defines the task dependency graph. Turborepo uses this to determine build order, caching, and parallelism.
+- `packageManager`: `pnpm@10.6.2`
+- `engines.node`: `>=20.0.0`
+- No root `lint` script currently
 
-```jsonc
+### 3.3 `turbo.json`
+
+```json
 {
-  "$schema": "https://turbo.build/schema.json",
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".next/**"]
+      "outputs": ["dist/**", ".next/**", ".output/**"]
     },
-    "dev": {
-      "cache": false,
-      "persistent": true
-    },
-    "test": {
-      "dependsOn": ["^build"],
-      "outputs": []
-    },
-    "lint": {
-      "outputs": []
-    },
-    "typecheck": {
-      "dependsOn": ["^build"],
-      "outputs": []
-    },
-    "db:migrate": {
-      "cache": false,
-      "outputs": []
-    },
-    "clean": {
-      "cache": false,
-      "outputs": []
-    }
+    "typecheck": { "dependsOn": ["^build"] },
+    "test": { "dependsOn": ["^build"] },
+    "dev": { "persistent": true, "cache": false },
+    "clean": { "cache": false }
   }
 }
 ```
 
-> **`^build` dependency:** The `^` prefix means "run `build` in all workspace dependencies first." This ensures `packages/shared` builds before `packages/db`, and `packages/db` builds before `apps/web`.
+### 3.4 `.npmrc`
 
-### 3.5 `tsconfig.base.json`
-
-Shared compiler options inherited by all workspaces.
-
-```jsonc
-{
-  "compilerOptions": {
-    "target": "ES2022",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "lib": ["ES2022"],
-    "strict": true,
-    "skipLibCheck": true,
-    "esModuleInterop": true,
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true,
-    "outDir": "dist",
-    "rootDir": "src"
-  },
-  "exclude": ["node_modules", "dist"]
-}
+```ini
+strict-peer-dependencies=true
+shamefully-hoist=false
 ```
 
-> **`"lib": ["ES2022"]` — no DOM:** Packages targeting the Workers runtime must not include `"DOM"` in `lib`. The `apps/web` and `apps/extension` workspaces add `"DOM"` in their own `tsconfig.json`. The `packages/parser` workspace adds `"DOM"` only because it uses `linkedom` to shim the DOM for DOMPurify — but it never runs in a real browser DOM.
+### 3.5 Shared TypeScript config (`tsconfig.base.json`)
+
+- `target`: `ES2022`
+- `module`: `ESNext`
+- `moduleResolution`: `bundler`
+- strict mode enabled globally
 
 ---
 
 ## 4. Shared Packages (`packages/`)
 
-Shared packages use the `@focus-reader/` npm scope. They are never published to a registry — they are consumed exclusively via PNPM's `workspace:*` protocol.
+All internal packages are private and consumed via `workspace:*`/`workspace:^`.
 
-### 4.1 `packages/shared` — Common Types, Constants, Utilities
+### 4.1 `packages/shared` (`@focus-reader/shared`)
 
-**Package name:** `@focus-reader/shared`
+Purpose:
 
-The foundation package with zero heavy dependencies. All other packages depend on it.
+- Core types (`Document`, `Feed`, `Subscription`, etc.)
+- Constants (`DOCUMENT_TYPES`, `CHANNEL_TYPES`, retry limits, paging defaults)
+- Utilities: URL normalization, slug/display-name conversion, reading-time helpers
+- Auto-tag rule evaluation utilities
 
-```
-packages/shared/
-├── src/
-│   ├── types.ts              # TypeScript types for all entities (Document, Subscription, Feed, Tag, etc.)
-│   ├── constants.ts          # Document types, triage locations, source types, defaults
-│   ├── url.ts                # URL normalization (strip utm_*, fbclid, etc.)
-│   ├── slug.ts               # Slug decoding for email local parts (morning-brew → Morning Brew)
-│   ├── time.ts               # ISO 8601 helpers, reading time estimation
-│   └── index.ts              # Barrel export
-├── tsconfig.json             # Extends ../../tsconfig.base.json
-└── package.json
-```
+Build/test:
 
-**Dependencies:** None (utility-only).
+- Bundling: `tsup` (ESM + d.ts)
+- Tests: Vitest (Node)
 
-**Depended on by:** All other packages and apps.
+### 4.2 `packages/db` (`@focus-reader/db`)
 
-### 4.2 `packages/db` — Database Schema, Migrations, Query Helpers
+Purpose:
 
-**Package name:** `@focus-reader/db`
+- Canonical D1 migrations
+- Typed query helpers for all entities
+- Schema/table constants
 
-Single source of truth for the D1 database. Contains SQL migrations, typed query builders, and schema constants. All database access across all apps goes through this package.
+Current migrations:
 
-```
-packages/db/
-├── migrations/
-│   ├── 0001_initial_schema.sql
-│   ├── 0002_fts5_indexes.sql          # Phase 2
-│   └── ...
-├── src/
-│   ├── schema.ts              # Table/column name constants, type guards
-│   ├── queries/
-│   │   ├── documents.ts       # CRUD + list/filter/paginate for Document
-│   │   ├── email-meta.ts      # Document_Email_Meta queries
-│   │   ├── pdf-meta.ts        # Document_PDF_Meta queries
-│   │   ├── subscriptions.ts   # Subscription CRUD
-│   │   ├── feeds.ts           # Feed CRUD
-│   │   ├── tags.ts            # Tag CRUD + join table management
-│   │   ├── highlights.ts      # Highlight CRUD
-│   │   ├── collections.ts     # Collection CRUD + ordering
-│   │   ├── ingestion-log.ts   # Ingestion logging
-│   │   ├── denylist.ts        # Denylist CRUD
-│   │   └── feed-tokens.ts     # Feed token CRUD
-│   ├── migrate.ts             # Migration runner utility
-│   └── index.ts               # Barrel export
-├── tsconfig.json
-└── package.json
-```
+- `0001_initial_schema.sql`
+- `0002_fts5_search.sql`
+- `0003_highlight_collection_indexes.sql`
 
-**Dependencies:**
-- `@focus-reader/shared` (`workspace:*`)
+Important query modules include:
 
-**Key design decisions:**
-- Queries accept a D1 database binding as a parameter (dependency injection), so they work in any Cloudflare Worker or Next.js API route.
-- No ORM — raw SQL via D1's prepared statement API for transparency and performance.
-- Migrations are plain SQL files, run via `wrangler d1 migrations apply` during deployment.
+- `documents`, `email-meta`, `pdf-meta`, `attachments`
+- `subscriptions`, `feeds`, `tags`, `highlights`
+- `search`, `saved-views`, `api-keys`, `denylist`, `ingestion-log`
 
-### 4.3 `packages/parser` — Content Parsing & Sanitization
+Build/test:
 
-**Package name:** `@focus-reader/parser`
+- Bundling: `tsup`
+- Extra export: `./migration-sql`
+- Tests: Vitest + `@cloudflare/vitest-pool-workers`
+- Migration script: `wrangler d1 migrations apply FOCUS_DB --local`
 
-All content ingestion logic: email parsing, article extraction, RSS feed parsing, HTML sanitization, and Markdown conversion. Designed to run in the Cloudflare Workers runtime (no Node.js-only APIs).
+### 4.3 `packages/parser` (`@focus-reader/parser`)
 
-```
-packages/parser/
-├── src/
-│   ├── email/
-│   │   ├── parse.ts           # postal-mime MIME parsing
-│   │   ├── dedup.ts           # Message-ID + fingerprint deduplication
-│   │   ├── validate.ts        # Rejection rules (empty body, denylist, spam)
-│   │   ├── confirm.ts         # Confirmation email detection
-│   │   └── index.ts
-│   ├── article/
-│   │   ├── extract.ts         # Readability-based content extraction
-│   │   ├── metadata.ts        # Open Graph / meta tag fallback extraction
-│   │   └── index.ts
-│   ├── rss/
-│   │   ├── fetch.ts           # RSS/Atom/JSON Feed fetching and parsing
-│   │   ├── opml.ts            # OPML import/export
-│   │   └── index.ts
-│   ├── sanitize.ts            # DOMPurify + linkedom HTML sanitization
-│   ├── markdown.ts            # Turndown HTML → Markdown conversion
-│   ├── attachments.ts         # MIME attachment metadata extraction
-│   └── index.ts               # Barrel export
-├── tsconfig.json
-└── package.json
-```
+Purpose:
 
-**Dependencies:**
-- `@focus-reader/shared` (`workspace:*`)
-- `postal-mime` — MIME email parsing (Workers-compatible)
-- `@mozilla/readability` — Article content extraction
-- `linkedom` — DOM shim for Workers
-- `dompurify` — HTML sanitization
-- `turndown` — HTML to Markdown conversion
+- Email parsing (`postal-mime`) and dedup helpers
+- Article extraction (`@mozilla/readability`)
+- RSS/Atom/JSON Feed fetch + OPML import/export
+- PDF metadata/text extraction helpers
+- HTML sanitization + HTML-to-Markdown conversion
 
-### 4.4 `packages/api` — Shared API Business Logic
+Implementation note:
 
-**Package name:** `@focus-reader/api`
+- Current sanitizer is a manual allowlist DOM walker using `linkedom` (`src/sanitize.ts`)
+- `dompurify` is present as a dependency but is not currently used in sanitizer runtime code
 
-Business logic for all API operations, extracted from route handlers so it can be tested independently and shared between the Next.js API routes and any future API surface.
+Build/test:
 
-```
-packages/api/
-├── src/
-│   ├── documents.ts           # Create, read, update, delete, list, filter, triage
-│   ├── subscriptions.ts       # Subscription management
-│   ├── feeds.ts               # Feed management, OPML operations
-│   ├── tags.ts                # Tag CRUD, auto-tagging rule evaluation
-│   ├── highlights.ts          # Highlight CRUD
-│   ├── collections.ts         # Collection management
-│   ├── search.ts              # FTS5 search interface
-│   ├── import-export.ts       # Import (OPML, CSV, JSON) / Export (JSON, Markdown)
-│   ├── auth.ts                # API key validation, Cloudflare Access JWT verification
-│   └── index.ts               # Barrel export
-├── tsconfig.json
-└── package.json
-```
+- Bundling: `tsup`
+- Tests: Vitest (Node) with parser fixtures
 
-**Dependencies:**
-- `@focus-reader/shared` (`workspace:*`)
-- `@focus-reader/db` (`workspace:*`)
-- `@focus-reader/parser` (`workspace:*`)
+### 4.4 `packages/api` (`@focus-reader/api`)
+
+Purpose:
+
+- Business logic consumed by web route handlers
+- Authentication helper logic (Cloudflare Access + API key)
+
+Current modules include:
+
+- `documents`, `subscriptions`, `feeds`, `tags`
+- `highlights`, `search`, `saved-views`, `api-keys`
+- `denylist`, `auth`
+
+Build/test:
+
+- Bundling: `tsup`
+- Tests: Vitest (`--passWithNoTests` script enabled, but tests exist)
 
 ---
 
 ## 5. Applications (`apps/`)
 
-### 5.1 `apps/web` — Next.js Web Application
+### 5.1 `apps/web` (`focus-reader-web`)
 
-The primary user interface, deployed to Cloudflare Pages via `@cloudflare/next-on-pages`.
+Runtime and deployment:
 
-```
-apps/web/
-├── app/                        # Next.js App Router
-│   ├── layout.tsx              # Root layout (theme, sidebar shell)
-│   ├── page.tsx                # Redirect to /inbox
-│   ├── (reader)/               # Reader route group
-│   │   ├── layout.tsx          # Three-pane layout shell
-│   │   ├── inbox/
-│   │   ├── later/
-│   │   ├── archive/
-│   │   ├── starred/
-│   │   ├── all/
-│   │   ├── subscriptions/
-│   │   │   └── [id]/
-│   │   ├── feeds/
-│   │   │   └── [id]/
-│   │   ├── tags/
-│   │   │   └── [id]/
-│   │   ├── collections/
-│   │   │   └── [id]/
-│   │   └── documents/
-│   │       └── [id]/           # Full-screen document view / focus mode
-│   ├── settings/               # Settings pages
-│   │   ├── general/
-│   │   ├── email/
-│   │   ├── feeds/
-│   │   ├── api-keys/
-│   │   ├── feed-tokens/
-│   │   ├── import-export/
-│   │   ├── shortcuts/
-│   │   └── ingestion-log/
-│   └── api/                    # API route handlers (thin wrappers around @focus-reader/api)
-│       ├── documents/
-│       │   ├── route.ts        # GET (list), POST (create)
-│       │   └── [id]/
-│       │       └── route.ts    # GET, PATCH, DELETE
-│       ├── highlights/
-│       ├── tags/
-│       ├── collections/
-│       ├── feeds/
-│       ├── subscriptions/
-│       ├── search/
-│       ├── import/
-│       ├── export/
-│       └── auth/
-├── components/
-│   ├── layout/
-│   │   ├── sidebar.tsx         # Left navigation sidebar
-│   │   ├── document-list.tsx   # Center pane (list + grid views)
-│   │   └── reading-pane.tsx    # Right pane (document reader)
-│   ├── documents/
-│   │   ├── document-card.tsx   # Grid view card
-│   │   ├── document-row.tsx    # List view row
-│   │   └── document-reader.tsx # Content renderer (HTML/Markdown/PDF)
-│   ├── highlights/
-│   ├── tags/
-│   ├── collections/
-│   ├── search/
-│   ├── settings/
-│   └── ui/                     # Shared UI primitives (buttons, inputs, modals, etc.)
-├── hooks/                      # React hooks (keyboard shortcuts, reading progress, etc.)
-├── lib/                        # Client-side utilities (API client, theme, preferences)
-├── public/
-├── styles/
-├── wrangler.toml               # Cloudflare Pages bindings (D1, R2)
-├── next.config.mjs
-├── tsconfig.json               # Extends ../../tsconfig.base.json, adds "DOM" to lib
-└── package.json
-```
+- Next.js 15 App Router + React 19
+- Deployed with `@opennextjs/cloudflare`
+- Cloudflare Worker entry generated at `.open-next/worker.js`
 
-**Dependencies:**
-- `@focus-reader/shared` (`workspace:*`)
-- `@focus-reader/db` (`workspace:*`)
-- `@focus-reader/api` (`workspace:*`)
-- `@focus-reader/parser` (`workspace:*`) — for client-side Markdown rendering if needed
-- `next`, `react`, `react-dom`
-- `@cloudflare/next-on-pages`
+Key config files:
 
-### 5.2 `apps/email-worker` — Cloudflare Email Worker
+- `next.config.ts` uses `initOpenNextCloudflareForDev()` with shared persist path
+- `open-next.config.ts` enables R2 incremental cache override
+- `wrangler.toml` binds D1/R2 and `NEXT_INC_CACHE_R2_BUCKET`
 
-Handles inbound email via Cloudflare Email Routing. Minimal glue code — delegates to `@focus-reader/parser` and `@focus-reader/db`.
+App route groups:
 
-```
-apps/email-worker/
-├── src/
-│   └── index.ts                # email() handler: parse → validate → store
-├── wrangler.toml               # Email routing config, D1/R2 bindings
-├── tsconfig.json
-└── package.json
-```
+- Reader views: `/inbox`, `/later`, `/archive`, `/all`, `/starred`
+- Filtered resource views: `/subscriptions/[id]`, `/feeds/[id]`, `/tags/[id]`, `/views/[id]`
+- Settings: `/settings/*` (email, subscriptions, feeds, denylist, API keys, ingestion log)
 
-**Dependencies:**
-- `@focus-reader/shared` (`workspace:*`)
-- `@focus-reader/db` (`workspace:*`)
-- `@focus-reader/parser` (`workspace:*`)
+API route handlers currently implemented under `src/app/api`:
 
-**`wrangler.toml` bindings:**
-- `D1`: `FOCUS_DB` — shared database
-- `R2`: `FOCUS_STORAGE` — binary storage (Phase 2 attachments)
+- `documents`, `documents/upload`, `documents/[id]`, `documents/[id]/content`, `documents/[id]/tags`, `documents/[id]/highlights`
+- `highlights`, `highlights/[id]`, `highlights/[id]/tags`
+- `subscriptions`, `subscriptions/[id]`, `subscriptions/[id]/tags`
+- `feeds`, `feeds/[id]`, `feeds/[id]/tags`, `feeds/import`, `feeds/export`
+- `tags`, `tags/[id]`
+- `saved-views`, `saved-views/[id]`
+- `api-keys`, `api-keys/[id]`
+- `denylist`, `denylist/[id]`
+- `search`, `settings`, `ingestion-log`
 
-### 5.3 `apps/rss-worker` — Cloudflare Cron Worker
+Testing:
 
-Polls RSS/Atom feeds on a schedule. Triggered by Cloudflare Cron Triggers.
+- Vitest in Node environment for API route tests (`src/__tests__/api`)
 
-```
-apps/rss-worker/
-├── src/
-│   └── index.ts                # scheduled() handler: fetch feeds → parse → store
-├── wrangler.toml               # Cron trigger config, D1 binding
-├── tsconfig.json
-└── package.json
-```
+### 5.2 `apps/email-worker` (`focus-reader-email-worker`)
 
-**Dependencies:**
-- `@focus-reader/shared` (`workspace:*`)
-- `@focus-reader/db` (`workspace:*`)
-- `@focus-reader/parser` (`workspace:*`)
+Purpose:
 
-**`wrangler.toml` bindings:**
-- `D1`: `FOCUS_DB` — shared database
-- Cron trigger: e.g., `*/15 * * * *` (every 15 minutes; the worker checks per-feed intervals internally)
+- Handles inbound emails via Cloudflare Email Routing
+- Runs parse -> dedup -> validate -> sanitize -> CID upload -> markdown conversion -> D1 persist
 
-### 5.4 `apps/extension` — Browser Extension
+Current characteristics:
 
-Browser extension for saving content to Focus Reader. Communicates with the REST API.
+- Uses `FOCUS_DB` (D1) and `FOCUS_STORAGE` (R2)
+- Uses `EMAIL_DOMAIN` and `COLLAPSE_PLUS_ALIAS` env vars
+- Build script uses `wrangler deploy --dry-run --outdir dist`
 
-```
-apps/extension/
-├── src/
-│   ├── background/
-│   │   └── service-worker.ts   # Background service worker
-│   ├── content/
-│   │   └── content-script.ts   # Page content extraction
-│   ├── popup/
-│   │   ├── popup.html
-│   │   ├── popup.tsx           # Save UI with tag picker
-│   │   └── popup.css
-│   ├── options/
-│   │   ├── options.html
-│   │   └── options.tsx         # API URL + key configuration
-│   └── lib/
-│       └── api-client.ts       # REST API client
-├── manifest.json               # WebExtension manifest v3
-├── tsconfig.json
-└── package.json
-```
+Testing:
 
-**Dependencies:**
-- `@focus-reader/shared` (`workspace:*`) — types and constants only
+- Vitest + `@cloudflare/vitest-pool-workers`
+- Miniflare config includes D1 + R2
 
-> **Note:** The extension does not depend on `@focus-reader/db`, `@focus-reader/parser`, or `@focus-reader/api`. It communicates with the server exclusively via the REST API. It only imports types and constants from `@focus-reader/shared`.
+### 5.3 `apps/rss-worker` (`focus-reader-rss-worker`)
+
+Purpose:
+
+- Scheduled polling of active feeds
+- Creates RSS documents, applies feed auto-tag rules, inherits feed tags, logs ingestion outcomes
+
+Current characteristics:
+
+- Uses `FOCUS_DB` (D1)
+- Cron trigger currently: `0 */12 * * *`
+- Marks feeds inactive after repeated errors (logic in worker source)
+
+Testing:
+
+- Vitest + `@cloudflare/vitest-pool-workers`
+
+### 5.4 `apps/extension` (`focus-reader-extension`)
+
+Runtime and tooling:
+
+- WXT-based browser extension with React (`@wxt-dev/module-react`)
+- Build output under `.output/`
+
+Current source layout:
+
+- `src/entrypoints/background.ts`
+- `src/entrypoints/content.ts`
+- `src/entrypoints/popup/*`
+- `src/entrypoints/options/*`
+- `src/lib/api-client.ts`
+
+Current integration model:
+
+- Stores API URL/API key in extension storage
+- Calls Focus Reader REST API over HTTP (`Authorization: Bearer <key>`)
+- Does not currently import internal monorepo packages
 
 ---
 
-## 6. Dependency Graph
+## 6. Dependency Graph (Current)
 
-```
-@focus-reader/shared          ← foundation (no internal deps)
-       │
-       ├── @focus-reader/db           ← depends on shared
-       │
-       ├── @focus-reader/parser       ← depends on shared
-       │
-       └── @focus-reader/api          ← depends on shared, db, parser
-                │
-    ┌───────────┼───────────────┐
-    ▼           ▼               ▼
- apps/web   apps/email-worker  apps/rss-worker     apps/extension
-                                                     │
-                                              (shared types only)
+```text
+@focus-reader/shared
+  ├─> @focus-reader/db
+  │     ├─> @focus-reader/api
+  │     │     └─> apps/web
+  │     ├─> apps/email-worker
+  │     └─> apps/rss-worker
+  └─> @focus-reader/parser
+        ├─> @focus-reader/api
+        ├─> apps/email-worker
+        └─> apps/rss-worker
+
+apps/extension (HTTP client to web API; no internal package deps today)
 ```
 
-All `workspace:*` dependencies flow downward. There are no circular dependencies.
+Notes:
+
+- `apps/web` directly depends on `@focus-reader/shared`, `@focus-reader/db`, `@focus-reader/api`
+- `apps/web` does not currently declare a direct dependency on `@focus-reader/parser`
 
 ---
 
-## 7. Shared Cloudflare Bindings
+## 7. Cloudflare Bindings and Runtime Resources
 
-All worker-based apps (`apps/web`, `apps/email-worker`, `apps/rss-worker`) bind to the **same** D1 database and R2 bucket. Each app's `wrangler.toml` declares these bindings independently, pointing to the same Cloudflare resource IDs.
+### 7.1 Shared bindings
 
-| Binding Name    | Type | Resource              | Used By                                             |
-|-----------------|------|-----------------------|-----------------------------------------------------|
-| `FOCUS_DB`      | D1   | Focus Reader database | web, email-worker, rss-worker                       |
-| `FOCUS_STORAGE` | R2   | Binary object storage | web (PDF upload), email-worker (future attachments) |
+| Binding | Type | Used by |
+|---|---|---|
+| `FOCUS_DB` | D1 | web, email-worker, rss-worker, db migration tooling |
+| `FOCUS_STORAGE` | R2 | web, email-worker |
 
-> **Naming convention:** All binding names use the `FOCUS_` prefix to avoid collisions with Cloudflare's built-in environment variables.
+### 7.2 Web-only binding
+
+| Binding | Type | Purpose |
+|---|---|---|
+| `NEXT_INC_CACHE_R2_BUCKET` | R2 | OpenNext incremental cache |
+
+### 7.3 Important env vars in active code paths
+
+- `EMAIL_DOMAIN`
+- `COLLAPSE_PLUS_ALIAS`
+- `OWNER_EMAIL`
+- `CF_ACCESS_TEAM_DOMAIN`
+- `CF_ACCESS_AUD`
 
 ---
 
-## 8. Scripts and Task Pipeline
+## 8. Build, Dev, and Task Pipeline
 
-### 8.1 Common Scripts (per workspace)
-
-Each workspace defines a consistent set of scripts in its `package.json`:
-
-| Script      | Description                          |
-|-------------|--------------------------------------|
-| `build`     | Compile TypeScript / build the app   |
-| `dev`       | Start in development mode            |
-| `test`      | Run tests (vitest)                   |
-| `lint`      | Run ESLint                           |
-| `typecheck` | Run `tsc --noEmit`                   |
-| `clean`     | Remove `dist/`, `.next/`, etc.       |
-
-### 8.2 Root-Level Commands
-
-All commands are run from the repository root via Turborepo:
+### 8.1 Root commands
 
 ```bash
-pnpm build              # Build all packages and apps (in dependency order)
-pnpm dev                # Start all apps in dev mode (parallel)
-pnpm test               # Run all tests
-pnpm lint               # Lint all workspaces
-pnpm typecheck          # Type-check all workspaces
-pnpm db:migrate         # Run D1 migrations
-pnpm --filter apps/web dev        # Dev only the web app (+ its package deps)
-pnpm --filter @focus-reader/db test   # Test only the db package
+pnpm build
+pnpm dev
+pnpm test
+pnpm typecheck
+pnpm db:migrate
 ```
 
-### 8.3 Shared Local Persistence
+### 8.2 Per-workspace highlights
 
-To ensure all workspaces share the same local D1 and R2 state during development, the root `dev` command must enforce a shared persistence directory. This prevents the `email-worker` from writing to one SQLite file while `apps/web` reads from another.
+- Packages (`shared`, `db`, `parser`, `api`) use `tsup` for builds
+- `apps/web` uses `next build`
+- Worker apps use Wrangler dry-run deploy for build artifacts
+- `apps/extension` uses WXT (`wxt build`, `wxt` for dev)
+
+### 8.3 Turbo behavior
+
+- `build` runs in dependency order (`^build`)
+- `test` and `typecheck` also depend on `^build`
+- `dev` is non-cached and persistent
+
+---
+
+## 9. Testing Strategy (Current)
+
+| Workspace | Runner | Environment |
+|---|---|---|
+| `packages/shared` | Vitest | Node |
+| `packages/parser` | Vitest | Node |
+| `packages/api` | Vitest | Node |
+| `packages/db` | Vitest + workers pool | workerd (D1) |
+| `apps/web` | Vitest | Node |
+| `apps/email-worker` | Vitest + workers pool | workerd (D1 + R2) |
+| `apps/rss-worker` | Vitest + workers pool | workerd (D1) |
+| `apps/extension` | Vitest | Node |
+
+Version constraint in workspace scripts/deps:
+
+- `vitest` pinned to `~3.2.0`
+
+---
+
+## 10. Local Development and Persistence
+
+### 10.1 Typical local app startup
 
 ```bash
-# Example root command implementation
-turbo run dev -- --persist-to ../../.wrangler/state
+pnpm --filter focus-reader-web dev
+pnpm --filter focus-reader-email-worker dev
+pnpm --filter focus-reader-rss-worker dev
+pnpm --filter focus-reader-extension dev
 ```
 
----
+### 10.2 Local state persistence
 
-## 9. Testing Strategy
+- Web dev initializes OpenNext Cloudflare dev with persist path `../../.wrangler/state/v3`
+- Email/RSS worker dev scripts use `wrangler dev --persist-to ../../.wrangler/state`
+- `scripts/ingest-local.ts` uses Miniflare persistence rooted at `apps/email-worker/.wrangler/state`
 
-| Layer               | Framework | Scope                                                    |
-|---------------------|-----------|----------------------------------------------------------|
-| `packages/shared`   | Vitest    | Unit tests for utilities (URL normalization, slug, time) |
-| `packages/db`       | Vitest    | Query tests against D1 miniflare bindings                |
-| `packages/parser`   | Vitest    | Unit tests with fixture emails, articles, feeds          |
-| `packages/api`      | Vitest    | Integration tests with mocked D1                         |
-| `apps/web`          | Vitest    | Component tests, API route tests                         |
-| `apps/email-worker` | Vitest    | Integration tests with miniflare email event simulation  |
-| `apps/rss-worker`   | Vitest    | Integration tests with miniflare scheduled event sim     |
-| `apps/extension`    | Vitest    | Unit tests for content extraction and API client         |
+### 10.3 Local secrets sync helper
 
-All workspaces use **Vitest** for consistency. Cloudflare-specific tests use `@cloudflare/vitest-pool-workers` (miniflare) for local D1/R2/Worker simulation.
+`./scripts/sync-secrets.sh` writes shared values to:
 
----
+- `apps/email-worker/.dev.vars`
+- `apps/web/.dev.vars`
 
-## 10. CI/CD Pipeline
+Variables written:
 
-A single GitHub Actions workflow handles all workspaces:
-
-1. **Install:** `pnpm install --frozen-lockfile`
-2. **Typecheck:** `pnpm typecheck` (all workspaces, parallel via Turbo)
-3. **Lint:** `pnpm lint` (all workspaces, parallel via Turbo)
-4. **Test:** `pnpm test` (all workspaces, dependency-ordered via Turbo)
-5. **Build:** `pnpm build` (all workspaces, dependency-ordered via Turbo)
-6. **Deploy** (on `main` branch only):
-   - `apps/web` → `wrangler pages deploy`
-   - `apps/email-worker` → `wrangler deploy`
-   - `apps/rss-worker` → `wrangler deploy`
-   - D1 migrations → `wrangler d1 migrations apply` (before app deployments)
-
-Turborepo remote caching is enabled in CI to skip unchanged workspaces.
+- `EMAIL_DOMAIN`
+- `COLLAPSE_PLUS_ALIAS`
+- `OWNER_EMAIL`
 
 ---
 
-## 12. Secret Management
+## 11. CI/CD and Deployment Status
 
-Focus Reader relies on environment variables for configuration and secrets (e.g., `OWNER_EMAIL`). 
+Current repository state:
 
-- **Local Development:** Each app workspace (`apps/web`, `apps/email-worker`, `apps/rss-worker`) uses a `.dev.vars` file for local secrets. These files are excluded from version control.
-- **Production:** Secrets are provisioned using `wrangler secret put` for each deployable unit.
-- **Synchronization:** A root-level `scripts/sync-secrets.sh` utility is used to propagate shared non-sensitive configuration variables across the multiple `wrangler.toml` files and local environment templates, ensuring consistency across the stack.
+- No `.github/workflows` directory is committed right now
+- Deployment is performed via workspace-specific Wrangler/OpenNext commands
 
----
+Current deployment components:
 
-## 13. Implementation Details
-
-### 13.1 Local State Orchestration
-When running the stack locally via `turbo run dev`, Turborepo orchestrates multiple `wrangler dev` instances. By passing the `--persist-to` flag relative to each workspace, we direct all emulated services (D1, R2) to the same directory in the project root. This allows for a seamless "Ingest in Worker -> View in Web" local feedback loop.
-
-### 13.2 Ownership Bootstrap
-The system identifies the administrator by comparing the `email` claim in the Cloudflare Access JWT against the `OWNER_EMAIL` environment variable. This variable must be configured identically across all ingestors and the web API to ensure consistent authorization logic.
+- `apps/web` (OpenNext Cloudflare worker + assets)
+- `apps/email-worker`
+- `apps/rss-worker`
 
 ---
 
-## 14. Relationship to Other Specifications
+## 12. Spec Maintenance Notes
 
-- **[Focus Reader PRD](./focus-reader-prd.md):** Defines the product requirements, data model, and feature specifications that this repo structure implements.
-- **[Email Newsletter PRD](./email-newsletter-prd.md):** Detailed specification for the email ingestion subsystem, implemented primarily in `packages/parser/src/email/` and `apps/email-worker/`.
+When updating this file, keep it implementation-aligned:
+
+- Prefer reading actual workspace `package.json`, `wrangler.toml`, and app/package source trees
+- Update dependency graphs when `workspace:*` relationships change
+- Reflect route and API handler changes under `apps/web/src/app/api`
+- Reflect any new migrations under `packages/db/migrations`
+
+---
+
+## 13. Relationship to Other Specs
+
+- **`focus-reader-prd.md`**: Product scope and data model requirements
+- **`email-newsletter-prd.md`**: Detailed email ingestion behavior
+- **`focus-reader-ui-spec.md`**: UI architecture and interaction details for the web app
+
+This document is the repository topology and tooling reference for implementing those specs.

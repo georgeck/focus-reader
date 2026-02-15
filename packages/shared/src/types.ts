@@ -443,6 +443,67 @@ export interface ViewSortConfig {
   direction: "asc" | "desc";
 }
 
+// --- Highlight types ---
+
+export type HighlightColor = "#FFFF00" | "#90EE90" | "#87CEEB" | "#DDA0DD" | "#FF6B6B";
+
+export interface PositionSelector {
+  type: "TextPositionSelector";
+  cssSelector: string;
+  startOffset: number;
+  endOffset: number;
+  surroundingText: {
+    prefix: string;
+    exact: string;
+    suffix: string;
+  };
+}
+
+export interface CreateHighlightInput {
+  id?: string;
+  document_id: string;
+  text: string;
+  note?: string | null;
+  color?: string;
+  position_selector?: string | null;
+  position_percent?: number;
+}
+
+export interface UpdateHighlightInput {
+  text?: string;
+  note?: string | null;
+  color?: string;
+}
+
+export interface HighlightWithTags extends Highlight {
+  tags: Tag[];
+}
+
+export interface HighlightWithDocument extends HighlightWithTags {
+  document: Pick<Document, "id" | "title" | "url" | "author" | "type">;
+}
+
+// --- Collection types ---
+
+export interface CreateCollectionInput {
+  id?: string;
+  name: string;
+  description?: string | null;
+}
+
+export interface UpdateCollectionInput {
+  name?: string;
+  description?: string | null;
+}
+
+export interface CollectionWithCount extends Collection {
+  documentCount: number;
+}
+
+export interface CollectionWithDocuments extends Collection {
+  documents: (DocumentWithTags & { sort_order: number; added_at: string })[];
+}
+
 // --- Update input types ---
 
 export interface UpdateDocumentInput {

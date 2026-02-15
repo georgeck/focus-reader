@@ -7,3 +7,5 @@ export * from "./auth.js";
 export * from "./search.js";
 export * from "./api-keys.js";
 export * from "./saved-views.js";
+export * from "./highlights.js";
+export * from "./collections.js";

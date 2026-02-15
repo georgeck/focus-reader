@@ -244,6 +244,13 @@ CREATE TABLE IF NOT EXISTS collection_documents (
 );
 `;
 
+// Auto-generated from migrations/0003_highlight_collection_indexes.sql
+export const INDEXES_MIGRATION_SQL = `
+CREATE INDEX IF NOT EXISTS idx_highlight_document_id ON highlight(document_id);
+CREATE INDEX IF NOT EXISTS idx_highlight_created_at ON highlight(created_at);
+CREATE INDEX IF NOT EXISTS idx_collection_documents_sort ON collection_documents(collection_id, sort_order);
+`;
+
 // Auto-generated from migrations/0002_fts5_search.sql
 export const FTS5_MIGRATION_SQL = `
 CREATE VIRTUAL TABLE IF NOT EXISTS document_fts USING fts5(

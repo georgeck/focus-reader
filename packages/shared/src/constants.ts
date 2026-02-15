@@ -46,6 +46,17 @@ export const SORT_OPTIONS = [
   { value: "reading_time_minutes", label: "Reading time", defaultDir: "asc" as const },
 ] as const;
 
+// Highlight colors
+export const HIGHLIGHT_COLORS: import("./types.js").HighlightColor[] = [
+  "#FFFF00",
+  "#90EE90",
+  "#87CEEB",
+  "#DDA0DD",
+  "#FF6B6B",
+];
+
+export const HIGHLIGHT_CONTEXT_LENGTH = 30;
+
 // Known email tracking pixel domains
 export const TRACKER_DOMAINS = [
   "list-manage.com",
