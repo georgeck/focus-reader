@@ -2,7 +2,7 @@
 
 **Version:** 1.0
 **Date:** February 14, 2026
-**Status:** In Progress — Steps 10–18 complete
+**Status:** In Progress — Steps 10–19 complete
 **Prerequisites:** Phase 1 complete (see `phase-1-plan.md` and `phase-1-implementation-gaps.md`)
 
 ---
@@ -1072,11 +1072,13 @@ export function useSavedViews(): SWRResponse<SavedView[]>;
 
 ---
 
-### Step 19: Browser Extension (Chrome) — WXT Framework
+### Step 19: Browser Extension (Chrome) — WXT Framework ✅ COMPLETE
 
 **Goal:** Create a Chrome extension (Manifest V3) using the [WXT framework](https://wxt.dev/) that saves the current page to Focus Reader.
 
-**Packages:** `apps/extension` (new)
+**Status:** Complete (commit `a7678dd`)
+
+**Packages:** `apps/extension` (new), `packages/api`, `apps/web`
 
 > **Why WXT?** WXT is the leading web extension framework (Vite-based, file-based entrypoints, auto-generated manifest, HMR in dev, first-class TypeScript, cross-browser support). It eliminates manual `manifest.json` authoring and the custom `tsup` bundling config that a raw extension would require. WXT's React module (`@wxt-dev/module-react`) provides zero-config JSX support for popup and options pages.
 
@@ -1296,16 +1298,16 @@ The `.output/` directory contains the built extension. WXT handles all Vite conf
 > **Note:** WXT provides `wxt/testing` utilities and works with Vitest's `fake-browser` for mocking the WebExtension APIs in unit tests.
 
 **Success criteria:**
-- [ ] `wxt build` produces a valid Chrome extension in `.output/chrome-mv3/`
-- [ ] Extension popup shows current page title and save options
-- [ ] "Save as Article" captures page HTML via content script and sends to API
-- [ ] "Save as Bookmark" sends URL only
-- [ ] Tag picker fetches and displays available tags
-- [ ] Options page allows configuring URL and API key, persists to storage
-- [ ] `Alt+Shift+S` shortcut triggers save via background script
-- [ ] CORS headers allow extension to call API
-- [ ] `wxt dev` launches Chrome with HMR working for popup/options
-- [ ] `pnpm build && pnpm typecheck && pnpm test` passes
+- [x] `wxt build` produces a valid Chrome extension in `.output/chrome-mv3/`
+- [x] Extension popup shows current page title and save options
+- [x] "Save as Article" captures page HTML via content script and sends to API
+- [x] "Save as Bookmark" sends URL only
+- [x] Tag picker fetches and displays available tags
+- [x] Options page allows configuring URL and API key, persists to storage
+- [x] `Alt+Shift+S` shortcut triggers save via background script
+- [x] CORS headers allow extension to call API
+- [x] `wxt dev` launches Chrome with HMR working for popup/options
+- [x] `pnpm build && pnpm typecheck && pnpm test` passes (283 tests, 0 failures)
 
 ---
 
@@ -1473,7 +1475,7 @@ Phase 2 is complete when ALL of the following are true:
 - [x] Full-text search returns relevant results across all documents
 - [x] j/k keyboard navigation works in the document list
 - [x] Command palette (Cmd+K) provides quick navigation
-- [ ] Chrome extension saves articles and bookmarks with tag picker
+- [x] Chrome extension saves articles and bookmarks with tag picker
 - [x] Auto-tagging rules run on email and RSS ingestion
 - [x] Saved views appear in the sidebar with correct filtered results
 - [x] PDFs can be uploaded, stored in R2, and viewed in the reading pane
