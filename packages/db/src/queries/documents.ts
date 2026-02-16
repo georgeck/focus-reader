@@ -272,7 +272,11 @@ export async function softDeleteDocument(
     .prepare("UPDATE document SET deleted_at = ?1, updated_at = ?1 WHERE id = ?2")
     .bind(now, id)
     .run();
-  await deindexDocument(db, id);
+  try {
+    await deindexDocument(db, id);
+  } catch {
+    // FTS table may not exist in some environments; soft-delete still succeeds
+  }
 }
 
 export async function updateReadingProgress(
