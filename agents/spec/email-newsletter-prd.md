@@ -356,18 +356,20 @@ Each ingested newsletter email creates one `Document` row (with `type = 'email'`
 
 **Success Criteria:** User has fully migrated all newsletter subscriptions away from their inbox to Focus Reader.
 
-### Phase 3 — Intelligence Layer
+### Phase 3 — Highlights, Collections & Export (COMPLETE)
 
-**Goal:** AI-assisted organization and summarization.
+**Goal:** Feature parity with commercial readers for power users.
 
 **Deliverables:**
 
-- RSS/Atom feed output.
-- LLM-based auto-tagging on ingestion.
-- Per-document summaries.
-- Daily/weekly digest generation.
+- Highlighting and annotation system (text selection, colors, notes).
+- Collections (curated reading lists with drag-and-drop reordering).
+- Full data export (JSON, Markdown, ZIP).
+- Customizable reading preferences (font, size, line height, width).
 
-**Success Criteria:** User spends less time triaging and more time reading high-value content.
+**Success Criteria:** User has fully replaced Readwise Reader with Focus Reader for daily use.
+
+> **Note:** See [focus-reader-prd.md](./focus-reader-prd.md) for the canonical phase definitions. Phase 4 (Intelligence Layer) covers AI-assisted features: LLM auto-tagging, summaries, digest generation.
 
 ---
 
@@ -419,7 +421,7 @@ Each ingested newsletter email creates one `Document` row (with `type = 'email'`
 
 1. **Image handling:** Start with hotlinking from original sources for simplicity. A local proxy/cache layer will be considered in Phase 2 to address link rot and privacy concerns.
 2. **Multi-device sync:** Read/unread state is stored in the database and exposed via the UI, so it is inherently consistent across devices. No additional sync mechanism is needed.
-3. **Unsubscribe handling:** The system will parse `List-Unsubscribe` headers and provide a one-click unsubscribe action in the UI, planned for Phase 3.
+3. **Unsubscribe handling:** The system will parse `List-Unsubscribe` headers and provide a one-click unsubscribe action in the UI (not yet implemented).
 4. **Retention policy:** No automatic archival or deletion of old documents. All content is retained indefinitely.
 5. **Import/export:** Not required for v1. Will be revisited when RSS subscription features are implemented.
 

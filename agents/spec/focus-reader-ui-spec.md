@@ -1,8 +1,8 @@
-# Focus Reader — Phase 1 UI Specification
+# Focus Reader — UI Specification
 
-**Version:** 1.0
-**Date:** February 14, 2026
-**Status:** Draft
+**Version:** 1.1
+**Date:** February 15, 2026
+**Status:** Implemented (Phases 0–3 complete)
 **Reference:** Readwise Reader UI as visual benchmark
 
 ---
@@ -18,7 +18,7 @@
 - **Data fetching:** SWR for client-side cache + mutation
 - **State:** URL search params for view state (location, selected document), React context for ephemeral UI state (sidebar collapsed, focus mode)
 
-### 1.2 Theme (Phase 1: Light Only)
+### 1.2 Theme
 
 | Token                  | Value              | Usage                                   |
 |------------------------|--------------------|-----------------------------------------|
@@ -198,7 +198,7 @@ Activated by `f` key or toolbar button. In reading view, hides the TOC panel. Co
 │   ● blogging    (3) │
 │   ...               │
 ├─────────────────────┤
-│ ⌕ Search            │  ← Disabled in Phase 1 (placeholder)
+│ ⌕ Search            │
 │ ⚙ Settings          │
 └─────────────────────┘
 ```
@@ -248,7 +248,7 @@ Each nav item is a `<Link>` styled as a row:
   - Click navigates to `/tags/[id]`
 
 #### Footer
-- **Search:** `Search` icon + "Search" label. Disabled for Phase 1, show as `opacity-50 cursor-not-allowed` with tooltip "Coming in Phase 2"
+- **Search:** `Search` icon + "Search" label. Navigates to search view.
 - **Settings:** `Settings` icon + "Settings" label. Navigates to `/settings`
 
 ### 3.3 Mobile Sidebar
@@ -426,7 +426,7 @@ Empty state layout: centered vertically and horizontally, icon `size-12 text-mut
 - **Back button:** `ArrowLeft` icon button → returns to list (deselects document). Only visible on mobile/tablet.
 - **Prev/Next:** `ChevronUp` / `ChevronDown` icon buttons → navigate to previous/next document in current list. Disabled at boundaries. Map to `↑`/`↓` keys.
 - **Split view toggle:** `PanelLeft` icon button → toggles the Table of Contents panel
-- **Typography button:** `Type` icon labeled "Aa" — reserved for Phase 2 (font/size controls). Show as disabled.
+- **Typography button:** `Type` icon labeled "Aa" — opens font/size controls for reading preferences.
 
 #### Center (spacer)
 Empty `flex-1` spacer.
@@ -530,8 +530,8 @@ Width: 280px, collapsible via icon button in the toolbar area.
 
 #### Panel Tabs
 Using shadcn `Tabs` component:
-- **Info** (active in Phase 1)
-- **Notebook** — disabled, Phase 2+ (highlights/notes)
+- **Info** — document metadata and tags
+- **Notebook** — highlights and notes for the current document
 
 #### Info Tab Content
 
@@ -873,16 +873,16 @@ All shortcuts are disabled when focus is inside an input/textarea element.
 
 **Implementation:** `hooks/useKeyboardShortcuts.ts` using `useEffect` with `keydown` event listener.
 
-**Reference:** Full Readwise Reader shortcut list below. Each shortcut is marked as **Phase 1** (implement now), **Phase 2+** (defer), or **N/A** (not applicable to Focus Reader).
+**Reference:** Full Readwise Reader shortcut list below, adapted for Focus Reader.
 
-### 10.1 Phase 1 Shortcuts
+### 10.1 Implemented Shortcuts
 
 | Key              | Action                              | Context       | Readwise Key |
 |------------------|-------------------------------------|---------------|--------------|
 | `?`              | Show keyboard shortcuts help dialog | Global        | `?`          |
 | `Escape`         | Exit focus mode / close dialog      | Global        | —            |
 | `a`              | Save doc from URL                   | Global        | `a`          |
-| `/`              | Focus search (placeholder Phase 1)  | Global        | `/`          |
+| `/`              | Focus search                        | Global        | `/`          |
 | `↓` or `j`       | Navigate to next document           | Document list | `↓` or `j`   |
 | `↑` or `k`       | Navigate to previous document       | Document list | `↑` or `k`   |
 | `Enter`          | Open selected document              | Document list | —            |
@@ -901,30 +901,30 @@ All shortcuts are disabled when focus is inside an input/textarea element.
 | `Tab`            | Cycle forward through splits        | Global        | `Tab`        |
 | `Shift+Tab`      | Cycle backward through splits       | Global        | `Shift+Tab`  |
 | `Shift+H`        | Toggle HTML / Markdown view         | Reading view  | — (FR only)  |
+| `Cmd+K`          | Open command palette                | Global        | `Cmd+K`      |
+| `Shift+N`        | Add a document note                 | Reading view  | `Shift+N`    |
+| `Shift+Option+C` | Copy annotations to clipboard       | Reading view  | `Shift+Option+C` |
+| `Ctrl+Shift+F`   | Cycle typeface                      | Reading view  | `Ctrl+Shift+F`   |
+| `Shift+=`        | Increase font size                  | Reading view  | `Shift+=`    |
+| `Shift+-`        | Decrease font size                  | Reading view  | `Shift+-`    |
+| `Shift+"`        | Increase line spacing               | Reading view  | `Shift+"`    |
+| `Shift+:`        | Decrease line spacing               | Reading view  | `Shift+:`    |
+| `Shift+.`        | Widen line length                   | Reading view  | `Shift+.`    |
+| `Shift+,`        | Narrow line length                  | Reading view  | `Shift+,`    |
+| `Cmd+Option+T`   | Toggle dark mode                    | Global        | `Cmd+Option+T`   |
+| `Cmd+Shift+\`    | Toggle focus mode                   | Global        | `Cmd+Shift+\`    |
+| `Cmd+\`          | Toggle all panels hidden            | Global        | `Cmd+\`      |
 
-### 10.2 Phase 2+ Shortcuts (Deferred)
+### 10.2 Not Yet Implemented Shortcuts
 
-| Key              | Action                                | Readwise Key     | Phase   |
-|------------------|---------------------------------------|------------------|---------|
-| `Cmd+K`          | Open command palette                  | `Cmd+K`          | Phase 2 |
-| `Shift+N`        | Add a document note                   | `Shift+N`        | Phase 2 |
-| `Shift+Option+C` | Copy annotations to clipboard         | `Shift+Option+C` | Phase 2 |
-| `Ctrl+Shift+F`   | Cycle typeface                        | `Ctrl+Shift+F`   | Phase 2 |
-| `Shift+=`        | Increase font size                    | `Shift+=`        | Phase 2 |
-| `Shift+-`        | Decrease font size                    | `Shift+-`        | Phase 2 |
-| `Shift+"`        | Increase line spacing                 | `Shift+"`        | Phase 2 |
-| `Shift+:`        | Decrease line spacing                 | `Shift+:`        | Phase 2 |
-| `Shift+.`        | Widen line length                     | `Shift+.`        | Phase 2 |
-| `Shift+,`        | Narrow line length                    | `Shift+,`        | Phase 2 |
-| `Cmd+Option+T`   | Toggle dark mode                      | `Cmd+Option+T`   | Phase 2 |
-| `Cmd+Shift+\`    | Toggle focus mode                     | `Cmd+Shift+\`    | Phase 2 |
-| `Cmd+\`          | Toggle all panels hidden              | `Cmd+\`          | Phase 2 |
-| `v`              | Open quick view switcher              | `v`              | Phase 2 |
-| `Shift+F`        | Filter all documents                  | `Shift+F`        | Phase 2 |
-| `Shift+R`        | Reset reading progress                | `Shift+R`        | Phase 2 |
-| `Shift+M`        | Edit metadata                         | `Shift+M`        | Phase 2 |
-| `Shift+X`        | Collapse/expand all sidebar items     | `Shift+X`        | Phase 2 |
-| `Shift+B`        | Apply bulk actions                    | `Shift+B`        | Phase 2 |
+| Key              | Action                                | Readwise Key     |
+|------------------|---------------------------------------|------------------|
+| `v`              | Open quick view switcher              | `v`              |
+| `Shift+F`        | Filter all documents                  | `Shift+F`        |
+| `Shift+R`        | Reset reading progress                | `Shift+R`        |
+| `Shift+M`        | Edit metadata                         | `Shift+M`        |
+| `Shift+X`        | Collapse/expand all sidebar items     | `Shift+X`        |
+| `Shift+B`        | Apply bulk actions                    | `Shift+B`        |
 
 ### 10.3 Not Applicable to Focus Reader
 
@@ -935,8 +935,8 @@ These Readwise shortcuts are **not planned** for Focus Reader:
 | `s`           | Add to shortlist                             | No shortlist concept in FR |
 | `b`           | Bump document to top                         | No bump feature            |
 | `Shift+L`     | Copy Reader URL                              | No public sharing          |
-| `Shift+A`     | Add/remove RSS subscriptions                 | No RSS in Phase 1          |
-| `Shift+S`     | Subscribe/unsubscribe to document's RSS feed | No RSS in Phase 1          |
+| `Shift+A`     | Add/remove RSS subscriptions                 | Managed via settings       |
+| `Shift+S`     | Subscribe/unsubscribe to document's RSS feed | Managed via settings       |
 | `Option+S`    | Enable / view public link                    | No public sharing          |
 | `u`           | Upload file                                  | No file upload             |
 | `Cmd+P`       | Print document with annotations              | No print support           |
@@ -952,7 +952,7 @@ These Readwise shortcuts are **not planned** for Focus Reader:
 
 ### 10.4 Keyboard Shortcuts Help Dialog
 
-Triggered by `?` key. Uses shadcn `Dialog` to show a table of Phase 1 shortcuts grouped by context (Navigation, Document actions, Panel controls, Global).
+Triggered by `?` key. Uses shadcn `Dialog` to show a table of shortcuts grouped by context (Navigation, Document actions, Panel controls, Global).
 
 ---
 
@@ -1214,22 +1214,11 @@ All components use the "new-york" style variant for a clean, minimal look matchi
 
 ---
 
-## 17. Deferred to Phase 2+
+## 17. Not Yet Implemented UI Features
 
-The following UI elements are explicitly **not** built in Phase 1 but accounted for in the layout:
-
-| Feature                                 | Phase 1 Placeholder                                   |
+| Feature                                 | Status                                                |
 |-----------------------------------------|-------------------------------------------------------|
-| Dark mode                               | Theme CSS variables defined but only light values set |
-| Search                                  | Sidebar "Search" item shown disabled with tooltip     |
-| Typography controls (Aa)                | Toolbar button shown disabled                         |
-| Highlights/Annotations                  | Info panel "Notebook" tab shown disabled              |
-| Collections                             | Not shown in sidebar                                  |
-| RSS feeds                               | Not shown in sidebar                                  |
 | Home dashboard                          | Not built; `/` redirects to `/inbox`                  |
-| Reading preferences (font, size, width) | Not built                                             |
-| Browser extension                       | Not built                                             |
-| PDF viewer                              | Not built                                             |
 
 ---
 
@@ -1237,5 +1226,5 @@ The following UI elements are explicitly **not** built in Phase 1 but accounted 
 
 - **[Focus Reader PRD](./focus-reader-prd.md):** Product requirements and data model
 - **[Email Newsletter PRD](./email-newsletter-prd.md):** Email ingestion details, subscription model
-- **[Phase 1 Plan](../plans/phase-1-plan.md):** Implementation steps 6–9 that this UI spec details
+- **[Implementation Plans](../plans/):** Phase 0–3 implementation plans
 - **[Repo Structure](./repo-structure.md):** File organization for `apps/web`

@@ -240,7 +240,7 @@ App route groups:
 - Filtered resource views: `/subscriptions/[id]`, `/feeds/[id]`, `/tags/[id]`, `/views/[id]`, `/collections/[id]`
 - Settings: `/settings/*` (general + reading preferences, email, subscriptions, feeds, denylist, API keys, ingestion log, export)
 
-API route handlers currently implemented under `src/app/api` (37 routes):
+API route handlers currently implemented under `src/app/api` (38 routes):
 
 - `documents`, `documents/upload`, `documents/[id]`, `documents/[id]/content`, `documents/[id]/tags`, `documents/[id]/highlights`, `documents/[id]/collections`, `documents/[id]/export`
 - `highlights`, `highlights/[id]`, `highlights/[id]/tags`

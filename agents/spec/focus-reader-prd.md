@@ -981,7 +981,7 @@ Every API request must be authenticated. There are no unauthenticated endpoints 
 - Highlight tags and notes (separate from document tags).
 - Notebook view (all highlights for a document in right sidebar + global highlights page).
 - Collections (reading lists with drag-and-drop reordering via @dnd-kit).
-- Command palette (`Cmd+K`) with Phase 3 commands (Create Collection, Go to Highlights, Export Data).
+- Command palette (`Cmd+K`) with commands (Create Collection, Go to Highlights, Export Data).
 - Full data export (JSON download, single-doc Markdown with YAML frontmatter, bulk ZIP, highlights Markdown, copy-as-Markdown).
 - Customizable reading preferences (font family, font size, line height, content width — stored in user_preferences table).
 
@@ -1035,7 +1035,7 @@ Every API request must be authenticated. There are no unauthenticated endpoints 
 - D1 free tier: 5 GB — sufficient for thousands of documents.
 - R2 free tier: 10 GB storage, 10 million reads/month — sufficient for PDF storage.
 - Estimated annual storage: ~200 MB for text content + ~2 GB for PDFs (at moderate usage).
-- Images are hotlinked from original sources by default. A local proxy/cache is a Phase 3 consideration.
+- Images are hotlinked from original sources by default. A local proxy/cache is a future consideration.
 
 ### 8.5 Security
 

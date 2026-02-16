@@ -332,19 +332,19 @@ All API calls are routed through the background service worker. The popup, side 
 
 Extends the existing `browser.storage.sync` usage.
 
-| Key               | Type                            | Default     | Description                         |
-|-------------------|---------------------------------|-------------|-------------------------------------|
-| `apiUrl`          | `string`                        | `""`        | Focus Reader instance URL.          |
-| `apiKey`          | `string`                        | `""`        | API bearer token.                   |
-| `overlayEnabled`  | `boolean`                       | `true`      | Show highlights on pages (Phase 3). |
-| `theme`           | `"light" \| "dark" \| "system"` | `"system"`  | Extension UI theme.                 |
-| `defaultSaveType` | `"article" \| "bookmark"`       | `"article"` | Default save mode.                  |
+| Key               | Type                            | Default     | Description                                     |
+|-------------------|---------------------------------|-------------|-------------------------------------------------|
+| `apiUrl`          | `string`                        | `""`        | Focus Reader instance URL.                      |
+| `apiKey`          | `string`                        | `""`        | API bearer token.                               |
+| `overlayEnabled`  | `boolean`                       | `true`      | Show highlights on pages (not yet implemented). |
+| `theme`           | `"light" \| "dark" \| "system"` | `"system"`  | Extension UI theme.                             |
+| `defaultSaveType` | `"article" \| "bookmark"`       | `"article"` | Default save mode.                              |
 
 ---
 
 ## 8. Phased Rollout
 
-### Phase 1: Enhanced Popup & Context Menus
+### Enhanced Popup & Context Menus (Implemented)
 
 **Deliverables:**
 
@@ -362,7 +362,7 @@ Extends the existing `browser.storage.sync` usage.
 - All triage actions work without opening the web app.
 - Context menu save completes with notification feedback.
 
-### Phase 2: Side Panel
+### Side Panel (Not Yet Implemented)
 
 **Deliverables:**
 
@@ -375,7 +375,7 @@ Extends the existing `browser.storage.sync` usage.
 - Side panel opens and displays documents within 1s.
 - Switching browser tabs updates the panel's "current page" indicator.
 
-### Phase 3: On-Page Highlights
+### On-Page Highlights (Not Yet Implemented)
 
 **Deliverables:**
 
@@ -442,8 +442,8 @@ The extension relies on these existing API endpoints:
 | `GET /api/collections`                | Collection picker                                      |
 | `POST /api/collections/:id/documents` | Add to collection                                      |
 | `GET /api/documents`                  | Side panel list                                        |
-| `GET /api/documents/:id/highlights`   | On-page highlights (Phase 3)                           |
-| `POST /api/documents/:id/highlights`  | Create highlight (Phase 3)                             |
+| `GET /api/documents/:id/highlights`   | On-page highlights (not yet implemented in extension)  |
+| `POST /api/documents/:id/highlights`  | Create highlight (not yet implemented in extension)    |
 
 > **New endpoint needed:** `GET /api/documents?url=<encoded-url>` — filter documents by source URL. This may already work if the existing list endpoint supports URL filtering; otherwise, add it as a query parameter.
 
