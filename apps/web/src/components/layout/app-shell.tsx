@@ -43,10 +43,12 @@ export function AppShell({ children }: AppShellProps) {
     documentIds,
     currentDocumentIndex,
     setCurrentDocumentIndex,
+    selectedDocumentId,
     setSelectedDocumentId,
   } = useApp();
 
-  const { document: currentDoc, mutate: mutateDoc } = useDocument(selectedDocId);
+  const activeDocId = selectedDocId || selectedDocumentId;
+  const { document: currentDoc, mutate: mutateDoc } = useDocument(activeDocId);
 
   // Dialog states
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
@@ -58,14 +60,14 @@ export function AppShell({ children }: AppShellProps) {
 
   const patchDoc = useCallback(
     async (updates: Record<string, unknown>) => {
-      if (!selectedDocId) return;
-      await apiFetch(`/api/documents/${selectedDocId}`, {
+      if (!activeDocId) return;
+      await apiFetch(`/api/documents/${activeDocId}`, {
         method: "PATCH",
         body: JSON.stringify(updates),
       });
       mutateDoc();
     },
-    [selectedDocId, mutateDoc]
+    [activeDocId, mutateDoc]
   );
 
   const selectDocByIndex = useCallback(
@@ -174,8 +176,8 @@ export function AppShell({ children }: AppShellProps) {
       },
       // d — delete document
       d: () => {
-        if (!selectedDocId) return;
-        apiFetch(`/api/documents/${selectedDocId}`, { method: "DELETE" }).then(() => {
+        if (!activeDocId) return;
+        apiFetch(`/api/documents/${activeDocId}`, { method: "DELETE" }).then(() => {
           toast("Document deleted");
           const params = new URLSearchParams(searchParams.toString());
           params.delete("doc");
@@ -204,7 +206,7 @@ export function AppShell({ children }: AppShellProps) {
       },
       // t — open tag manager
       t: () => {
-        if (selectedDocId) setTagManagerOpen(true);
+        if (activeDocId) setTagManagerOpen(true);
       },
       // a — open add bookmark dialog
       a: () => setAddBookmarkOpen(true),
@@ -214,8 +216,8 @@ export function AppShell({ children }: AppShellProps) {
         const selection = window.getSelection();
         if (!selection || selection.isCollapsed) return;
         const text = selection.toString().trim();
-        if (!text || !selectedDocId) return;
-        apiFetch(`/api/documents/${selectedDocId}/highlights`, {
+        if (!text || !activeDocId) return;
+        apiFetch(`/api/documents/${activeDocId}/highlights`, {
           method: "POST",
           body: JSON.stringify({
             text,
@@ -254,7 +256,7 @@ export function AppShell({ children }: AppShellProps) {
       currentDocumentIndex,
       selectDocByIndex,
       openDocByIndex,
-      selectedDocId,
+      activeDocId,
     ]
   );
 
@@ -290,7 +292,7 @@ export function AppShell({ children }: AppShellProps) {
       <TagManagerDialog
         open={tagManagerOpen}
         onOpenChange={setTagManagerOpen}
-        documentId={selectedDocId ?? undefined}
+        documentId={activeDocId ?? undefined}
         documentTagIds={currentDoc?.tags?.map((t) => t.id) ?? []}
         onTagToggle={() => mutateDoc()}
       />

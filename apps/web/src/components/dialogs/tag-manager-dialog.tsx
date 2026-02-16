@@ -104,7 +104,10 @@ export function TagManagerDialog({
               value={newTagName}
               onChange={(e) => setNewTagName(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter") handleCreateTag();
+                if (e.key === "Enter") {
+                  e.stopPropagation();
+                  handleCreateTag();
+                }
               }}
               className="h-8 text-sm"
             />
