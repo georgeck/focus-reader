@@ -15,8 +15,16 @@ export default defineConfig({
   manifest: {
     name: "Focus Reader",
     description: "Save pages to Focus Reader as articles or bookmarks",
-    permissions: ["activeTab", "storage", "contextMenus", "notifications", "scripting"],
+    permissions: [
+      "activeTab",
+      "storage",
+      "contextMenus",
+      "notifications",
+      "scripting",
+      "permissions",
+    ],
     host_permissions: ["<all_urls>"],
+    optional_host_permissions: ["https://*/*", "http://*/*"],
     commands: {
       "save-page": {
         suggested_key: { default: "Alt+Shift+S" },

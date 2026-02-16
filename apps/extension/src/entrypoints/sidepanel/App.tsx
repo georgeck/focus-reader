@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
   getConfig,
-  updateDocument,
-  deleteDocument,
+  ensureApiOriginPermission,
   type DocumentDetail,
 } from "@/lib/api-client";
 import { sendMessage } from "@/lib/messaging";
@@ -40,6 +39,7 @@ export function App() {
   const [currentTabUrl, setCurrentTabUrl] = useState<string | null>(null);
   const [configured, setConfigured] = useState(true);
   const [apiUrl, setApiUrl] = useState("");
+  const [actionError, setActionError] = useState("");
   const listRef = useRef<HTMLDivElement>(null);
 
   const fetchDocs = useCallback(
@@ -173,30 +173,51 @@ export function App() {
   const handleStar = async (doc: DocumentDetail) => {
     const newVal = doc.is_starred ? 0 : 1;
     try {
-      await updateDocument(doc.id, { is_starred: newVal });
+      setActionError("");
+      const hasPermission = await ensureApiOriginPermission(apiUrl, { interactive: true });
+      if (!hasPermission) {
+        setActionError("Permission denied for API host. Allow access and try again.");
+        return;
+      }
+      await sendMessage("updateDocument", { id: doc.id, patch: { is_starred: newVal } });
       setDocs((prev) =>
         prev.map((d) => (d.id === doc.id ? { ...d, is_starred: newVal } : d))
       );
-    } catch {
-      // ignore
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to update document.");
+      console.error("Failed to toggle star:", err);
     }
   };
 
   const handleArchive = async (doc: DocumentDetail) => {
     try {
-      await updateDocument(doc.id, { location: "archive" });
+      setActionError("");
+      const hasPermission = await ensureApiOriginPermission(apiUrl, { interactive: true });
+      if (!hasPermission) {
+        setActionError("Permission denied for API host. Allow access and try again.");
+        return;
+      }
+      await sendMessage("updateDocument", { id: doc.id, patch: { location: "archive" } });
       setDocs((prev) => prev.filter((d) => d.id !== doc.id));
-    } catch {
-      // ignore
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to update document.");
+      console.error("Failed to archive document:", err);
     }
   };
 
   const handleDelete = async (doc: DocumentDetail) => {
     try {
-      await deleteDocument(doc.id);
+      setActionError("");
+      const hasPermission = await ensureApiOriginPermission(apiUrl, { interactive: true });
+      if (!hasPermission) {
+        setActionError("Permission denied for API host. Allow access and try again.");
+        return;
+      }
+      await sendMessage("deleteDocument", { id: doc.id });
       setDocs((prev) => prev.filter((d) => d.id !== doc.id));
-    } catch {
-      // ignore
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to delete document.");
+      console.error("Failed to delete document:", err);
     }
   };
 
@@ -232,6 +253,11 @@ export function App() {
       {/* Header */}
       <div className="shrink-0 px-4 pt-4 pb-2">
         <h1 className="text-[15px] font-semibold mb-3">Focus Reader</h1>
+        {actionError ? (
+          <p className="mb-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded-md px-2 py-1">
+            {actionError}
+          </p>
+        ) : null}
         <div className="flex gap-1 bg-gray-100 rounded-lg p-0.5">
           {tabs.map((t) => (
             <button

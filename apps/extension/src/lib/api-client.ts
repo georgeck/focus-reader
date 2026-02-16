@@ -13,6 +13,36 @@ export async function saveConfig(config: ExtensionConfig): Promise<void> {
   await browser.storage.sync.set({ apiUrl: config.apiUrl, apiKey: config.apiKey });
 }
 
+function apiOriginPattern(apiUrl: string): string | null {
+  try {
+    const parsed = new URL(apiUrl);
+    return `${parsed.protocol}//${parsed.host}/*`;
+  } catch {
+    return null;
+  }
+}
+
+export async function ensureApiOriginPermission(
+  apiUrl: string,
+  options?: { interactive?: boolean }
+): Promise<boolean> {
+  const originPattern = apiOriginPattern(apiUrl);
+  if (!originPattern) return false;
+
+  const permissionsApi = browser.permissions;
+  if (!permissionsApi?.contains) return true;
+
+  const hasPermission = await permissionsApi.contains({ origins: [originPattern] });
+  if (hasPermission) return true;
+  if (!options?.interactive || !permissionsApi.request) return false;
+
+  try {
+    return await permissionsApi.request({ origins: [originPattern] });
+  } catch {
+    return false;
+  }
+}
+
 const REQUEST_TIMEOUT_MS = 10_000;
 
 async function withTimeout<T>(
@@ -37,6 +67,13 @@ async function withTimeout<T>(
 async function request(path: string, init?: RequestInit): Promise<Response> {
   const config = await getConfig();
   if (!config) throw new Error("Extension not configured. Set API URL and key in options.");
+
+  const hasApiPermission = await ensureApiOriginPermission(config.apiUrl);
+  if (!hasApiPermission) {
+    throw new Error(
+      "API host permission is missing. Open extension settings and save your API URL to grant access."
+    );
+  }
 
   const url = `${config.apiUrl.replace(/\/$/, "")}${path}`;
   const res = await withTimeout(

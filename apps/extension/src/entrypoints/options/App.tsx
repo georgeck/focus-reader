@@ -1,11 +1,17 @@
 import { useState, useEffect } from "react";
-import { getConfig, saveConfig, testConnection } from "@/lib/api-client";
+import {
+  getConfig,
+  saveConfig,
+  testConnection,
+  ensureApiOriginPermission,
+} from "@/lib/api-client";
 
 export function App() {
   const [apiUrl, setApiUrl] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [showKey, setShowKey] = useState(false);
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "testing" | "connected" | "failed">("idle");
+  const [error, setError] = useState("");
 
   useEffect(() => {
     getConfig().then((config) => {
@@ -17,6 +23,13 @@ export function App() {
   }, []);
 
   const handleSave = async () => {
+    setError("");
+    const hasPermission = await ensureApiOriginPermission(apiUrl, { interactive: true });
+    if (!hasPermission) {
+      setStatus("failed");
+      setError("Permission denied for API host. Please allow access and try again.");
+      return;
+    }
     setStatus("saving");
     await saveConfig({ apiUrl, apiKey });
     setStatus("saved");
@@ -24,6 +37,13 @@ export function App() {
   };
 
   const handleTest = async () => {
+    setError("");
+    const hasPermission = await ensureApiOriginPermission(apiUrl, { interactive: true });
+    if (!hasPermission) {
+      setStatus("failed");
+      setError("Permission denied for API host. Please allow access and try again.");
+      return;
+    }
     setStatus("testing");
     await saveConfig({ apiUrl, apiKey });
     const ok = await testConnection();
@@ -91,7 +111,7 @@ export function App() {
         )}
         {status === "failed" && (
           <p className="mt-3 text-sm text-red-600 bg-red-50 rounded px-3 py-2">
-            Connection failed. Check your URL and API key.
+            {error || "Connection failed. Check your URL and API key."}
           </p>
         )}
       </div>

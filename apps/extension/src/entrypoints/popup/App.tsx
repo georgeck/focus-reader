@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
   getConfig,
+  ensureApiOriginPermission,
   savePage,
   updateDocument,
   deleteDocument,
@@ -465,6 +466,15 @@ export function App() {
     setSavingSettings(true);
     try {
       const cleanApiUrl = settingsApiUrl.trim().replace(/\/$/, "");
+      if (cleanApiUrl) {
+        const hasPermission = await ensureApiOriginPermission(cleanApiUrl, {
+          interactive: true,
+        });
+        if (!hasPermission) {
+          setError("Permission denied for API host. Allow access and try again.");
+          return;
+        }
+      }
       await browser.storage.sync.set({
         theme,
         defaultSaveType,

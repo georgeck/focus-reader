@@ -3,6 +3,7 @@ import {
   lookupByUrl,
   getDocuments,
   updateDocument,
+  deleteDocument,
   type DocumentDetail,
 } from "@/lib/api-client";
 import { onMessage } from "@/lib/messaging";
@@ -219,6 +220,10 @@ export default defineBackground(() => {
 
   onMessage("updateDocument", async (message) => {
     await updateDocument(message.data.id, message.data.patch);
+  });
+
+  onMessage("deleteDocument", async (message) => {
+    await deleteDocument(message.data.id);
   });
 
   onMessage("getDocuments", async (message) => {
