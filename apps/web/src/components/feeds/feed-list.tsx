@@ -2,76 +2,76 @@
 
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
-import type { TagWithCount } from "@focus-reader/shared";
-import { useTags } from "@/hooks/use-tags";
+import type { FeedWithStats } from "@focus-reader/shared";
+import { useFeeds } from "@/hooks/use-feeds";
 import { useApp } from "@/contexts/app-context";
-import { TagListItem } from "./tag-list-item";
-import { TagListToolbar } from "./tag-list-toolbar";
+import { FeedListItem } from "./feed-list-item";
+import { FeedListToolbar } from "./feed-list-toolbar";
 import { Skeleton } from "@/components/ui/skeleton";
 
-interface TagListProps {
+interface FeedListProps {
   title: string;
 }
 
-export function TagList({ title }: TagListProps) {
+export function FeedList({ title }: FeedListProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { selectedDocumentId, setDocumentIds, setCurrentDocumentIndex, setSelectedDocumentId } = useApp();
-  const { tags, isLoading, mutate } = useTags();
+  const { feeds, isLoading, mutate } = useFeeds();
 
   const [searchQuery, setSearchQuery] = useState("");
 
   // Sync context selection → URL so right panel reacts to keyboard nav
   useEffect(() => {
     if (!selectedDocumentId) return;
-    const current = searchParams.get("tag");
+    const current = searchParams.get("feed");
     if (current === selectedDocumentId) return;
     const params = new URLSearchParams(searchParams.toString());
-    params.set("tag", selectedDocumentId);
+    params.set("feed", selectedDocumentId);
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   }, [selectedDocumentId, searchParams, router, pathname]);
 
-  // Client-side search filtering
-  const filteredTags = useMemo(() => {
+  // Client-side search filtering by feed title
+  const filteredFeeds = useMemo(() => {
     if (!searchQuery.trim()) {
-      return tags;
+      return feeds;
     }
     const query = searchQuery.toLowerCase();
-    return tags.filter((t) => t.name.toLowerCase().includes(query));
-  }, [searchQuery, tags]);
+    return feeds.filter((f) => f.title.toLowerCase().includes(query));
+  }, [searchQuery, feeds]);
 
   // Sync to AppContext for keyboard nav (reuse documentIds array)
   useEffect(() => {
-    setDocumentIds(filteredTags.map((t) => t.id));
-  }, [filteredTags, setDocumentIds]);
+    setDocumentIds(filteredFeeds.map((f) => f.id));
+  }, [filteredFeeds, setDocumentIds]);
 
   // Selection handler
-  const selectTag = useCallback(
+  const selectFeed = useCallback(
     (id: string) => {
       setSelectedDocumentId(id);
-      const idx = filteredTags.findIndex((t) => t.id === id);
+      const idx = filteredFeeds.findIndex((f) => f.id === id);
       setCurrentDocumentIndex(idx);
-      // Update URL with ?tag=id
+      // Update URL with ?feed=id
       const params = new URLSearchParams(searchParams.toString());
-      params.set("tag", id);
+      params.set("feed", id);
       router.push(`${pathname}?${params.toString()}`, { scroll: false });
     },
-    [filteredTags, setSelectedDocumentId, setCurrentDocumentIndex, searchParams, router, pathname]
+    [filteredFeeds, setSelectedDocumentId, setCurrentDocumentIndex, searchParams, router, pathname]
   );
 
-  // Navigate to tag detail page (double-click)
-  const navigateToTag = useCallback(
+  // Navigate to feed detail page (double-click)
+  const navigateToFeed = useCallback(
     (id: string) => {
-      router.push(`/tags/${id}`);
+      router.push(`/feeds/${id}`);
     },
     [router]
   );
 
-  if (isLoading && tags.length === 0) {
+  if (isLoading && feeds.length === 0) {
     return (
       <div className="flex-1 flex flex-col">
-        <TagListToolbar title={title} total={0} onSearch={setSearchQuery} />
+        <FeedListToolbar title={title} total={0} onSearch={setSearchQuery} />
         <div className="flex-1 overflow-y-auto">
           {Array.from({ length: 8 }).map((_, i) => (
             <div key={i} className="flex gap-3 px-4 py-3 border-b">
@@ -87,15 +87,15 @@ export function TagList({ title }: TagListProps) {
     );
   }
 
-  if (filteredTags.length === 0) {
+  if (filteredFeeds.length === 0) {
     return (
       <div className="flex-1 flex flex-col">
-        <TagListToolbar title={title} total={0} onSearch={setSearchQuery} />
+        <FeedListToolbar title={title} total={0} onSearch={setSearchQuery} />
         <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
           {searchQuery.trim() ? (
-            <>No tags match &ldquo;{searchQuery}&rdquo;</>
+            <>No feeds match &ldquo;{searchQuery}&rdquo;</>
           ) : (
-            <>No tags yet. Tags are created when you tag documents.</>
+            <>No feeds yet. Add feeds in Settings to start collecting articles.</>
           )}
         </div>
       </div>
@@ -104,25 +104,25 @@ export function TagList({ title }: TagListProps) {
 
   return (
     <div className="flex-1 flex flex-col min-w-0">
-      <TagListToolbar
+      <FeedListToolbar
         title={title}
-        total={filteredTags.length}
+        total={filteredFeeds.length}
         onSearch={setSearchQuery}
       />
       <div className="flex-1 overflow-y-auto">
-        {filteredTags.map((tag) => (
-          <TagListItem
-            key={tag.id}
-            tag={tag}
-            isSelected={tag.id === (searchParams.get("tag") || selectedDocumentId)}
-            onClick={() => selectTag(tag.id)}
-            onDoubleClick={() => navigateToTag(tag.id)}
+        {filteredFeeds.map((feed) => (
+          <FeedListItem
+            key={feed.id}
+            feed={feed}
+            isSelected={feed.id === (searchParams.get("feed") || selectedDocumentId)}
+            onClick={() => selectFeed(feed.id)}
+            onDoubleClick={() => navigateToFeed(feed.id)}
             onMutate={mutate}
           />
         ))}
       </div>
       <div className="border-t px-4 py-1.5 text-xs text-muted-foreground text-right">
-        Count: {filteredTags.length}
+        Count: {filteredFeeds.length}
       </div>
     </div>
   );

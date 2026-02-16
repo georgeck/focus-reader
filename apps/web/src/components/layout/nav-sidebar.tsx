@@ -19,6 +19,7 @@ import {
   Highlighter,
   FolderOpen,
   Tag,
+  Rss,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -40,6 +41,7 @@ const NAV_ITEMS = [
   { label: "Starred", icon: Star, path: "/starred" },
   { label: "Highlights", icon: Highlighter, path: "/highlights" },
   { label: "Tags", icon: Tag, path: "/tags" },
+  { label: "Feeds", icon: Rss, path: "/feeds" },
 ] as const;
 
 export function NavSidebar() {

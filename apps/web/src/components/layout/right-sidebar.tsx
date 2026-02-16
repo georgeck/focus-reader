@@ -13,6 +13,8 @@ import Link from "next/link";
 import { FolderOpen } from "lucide-react";
 import { TagInfoPanel } from "@/components/tags/tag-info-panel";
 import { useTags } from "@/hooks/use-tags";
+import { FeedInfoPanel } from "@/components/feeds/feed-info-panel";
+import { useFeeds } from "@/hooks/use-feeds";
 
 function SectionHeading({ children }: { children: React.ReactNode }) {
   return (
@@ -51,6 +53,9 @@ export function RightSidebar() {
   const isTagsPage = pathname === "/tags";
   const { tags, mutate: mutateTags } = useTags();
 
+  const isFeedsPage = pathname === "/feeds";
+  const { feeds, mutate: mutateFeeds } = useFeeds();
+
   if (!rightPanelVisible) return null;
 
   // On tags page, show tag info instead of document info
@@ -64,6 +69,22 @@ export function RightSidebar() {
         </div>
         <div className="flex-1 overflow-y-auto">
           <TagInfoPanel tag={selectedTag} onMutate={mutateTags} />
+        </div>
+      </aside>
+    );
+  }
+
+  // On feeds page, show feed info instead of document info
+  if (isFeedsPage) {
+    const selectedFeedId = searchParams.get("feed");
+    const selectedFeed = feeds.find((f) => f.id === selectedFeedId) || null;
+    return (
+      <aside className="flex h-full w-[296px] flex-shrink-0 flex-col border-l bg-background">
+        <div className="p-4 border-b">
+          <h3 className="text-sm font-semibold">Feed Details</h3>
+        </div>
+        <div className="flex-1 overflow-y-auto">
+          <FeedInfoPanel feed={selectedFeed} onMutate={mutateFeeds} />
         </div>
       </aside>
     );
