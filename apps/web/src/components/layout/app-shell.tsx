@@ -30,6 +30,7 @@ export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
   const selectedDocId = searchParams.get("doc");
   const isReadingView = !!selectedDocId;
+  const isTagsPage = pathname === "/tags";
   const {
     sidebarCollapsed,
     toggleSidebar,
@@ -143,10 +144,16 @@ export function AppShell({ children }: AppShellProps) {
         const prevIdx = Math.max(currentDocumentIndex - 1, 0);
         selectDocByIndex(prevIdx);
       },
-      // Enter — open selected document in reading view
+      // Enter — open selected document in reading view (or navigate to tag detail on tags page)
       Enter: () => {
         if (!isReadingView && currentDocumentIndex >= 0 && currentDocumentIndex < documentIds.length) {
-          openDocByIndex(currentDocumentIndex);
+          if (isTagsPage) {
+            // On tags page, navigate to tag detail page
+            const tagId = documentIds[currentDocumentIndex];
+            router.push(`/tags/${tagId}`);
+          } else {
+            openDocByIndex(currentDocumentIndex);
+          }
         }
       },
       // o — open original URL in new tab

@@ -3,7 +3,7 @@
 import { useApp } from "@/contexts/app-context";
 import { useDocument } from "@/hooks/use-documents";
 import { useHighlightsForDocument } from "@/hooks/use-highlights";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, usePathname } from "next/navigation";
 import { timeAgo, formatDate, capitalize } from "@/lib/format";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { extractDomain } from "@focus-reader/shared";
@@ -11,6 +11,8 @@ import { NotebookHighlightCard } from "@/components/reader/notebook-highlight-ca
 import { useCollectionsForDocument } from "@/hooks/use-collections";
 import Link from "next/link";
 import { FolderOpen } from "lucide-react";
+import { TagInfoPanel } from "@/components/tags/tag-info-panel";
+import { useTags } from "@/hooks/use-tags";
 
 function SectionHeading({ children }: { children: React.ReactNode }) {
   return (
@@ -40,12 +42,32 @@ function scrollToHighlight(highlightId: string) {
 export function RightSidebar() {
   const { rightPanelVisible } = useApp();
   const searchParams = useSearchParams();
+  const pathname = usePathname();
   const selectedId = searchParams.get("doc");
   const { document: doc } = useDocument(selectedId);
   const { highlights } = useHighlightsForDocument(selectedId);
   const { collections: docCollections } = useCollectionsForDocument(selectedId);
 
+  const isTagsPage = pathname === "/tags";
+  const { tags, mutate: mutateTags } = useTags();
+
   if (!rightPanelVisible) return null;
+
+  // On tags page, show tag info instead of document info
+  if (isTagsPage) {
+    const selectedTagId = searchParams.get("tag");
+    const selectedTag = tags.find((t) => t.id === selectedTagId) || null;
+    return (
+      <aside className="flex h-full w-[296px] flex-shrink-0 flex-col border-l bg-background">
+        <div className="p-4 border-b">
+          <h3 className="text-sm font-semibold">Tag Details</h3>
+        </div>
+        <div className="flex-1 overflow-y-auto">
+          <TagInfoPanel tag={selectedTag} onMutate={mutateTags} />
+        </div>
+      </aside>
+    );
+  }
 
   return (
     <aside className="flex h-full w-[296px] flex-shrink-0 flex-col border-l bg-background">
