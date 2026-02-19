@@ -23,7 +23,7 @@ Commercial products like Readwise Reader address this well, but are closed-sourc
 
 **Focus Reader** is a self-hosted, open-source read-it-later application that unifies all reading content — web articles, bookmarks, PDFs, email newsletters, RSS feeds, social media posts, and other internet resources — into a single, distraction-free reading interface with highlighting, annotation, tagging, and full-text search.
 
-> **Definition of "self-hosted":** The application is deployed to the user's own Cloudflare account (using Workers, D1, Pages, R2, etc.) in a single-tenant configuration. The user owns and operates the infrastructure; there is no shared multi-tenant service.
+> **Definition of "self-hosted":** The application can be deployed to a user's own Cloudflare account (using Workers, D1, Pages, R2, etc.) in single-user mode, or operated as a multi-tenant SaaS where multiple users share the same D1 database with row-level data isolation.
 
 ### 1.3 Goals
 
@@ -40,7 +40,7 @@ Commercial products like Readwise Reader address this well, but are closed-sourc
 ### 1.4 Non-Goals
 
 - This is not a general-purpose email client.
-- This is not a collaborative or multi-tenant SaaS product (v1 targets single-user, self-hosted use).
+- ~~This is not a collaborative or multi-tenant SaaS product.~~ Multi-tenancy with row-level user isolation is now supported. However, this is not a collaborative tool — each user's data is fully isolated.
 - This is not a note-taking app (though it integrates with them via export).
 - This does not handle email sending.
 - This does not provide social features (sharing, commenting with others).
@@ -50,7 +50,7 @@ Commercial products like Readwise Reader address this well, but are closed-sourc
 
 ## 2. Target User
 
-A single power user (the system operator) who:
+In single-user mode, a self-hosting power user. In multi-tenant mode, multiple independent users. The typical user:
 
 - Consumes information from many sources (articles, newsletters, RSS, PDFs).
 - Values organized reading workflows and distraction-free focus.
@@ -165,6 +165,22 @@ Use a **catch-all configuration on a dedicated subdomain** (e.g., `*@read.yourdo
 
 > **Implementation notes:** All UUIDs are stored as `TEXT` columns using `crypto.randomUUID()`. Tags use normalized join tables. Timestamps are ISO 8601 strings.
 
+#### User
+
+The identity record for each person using the system. In single-user mode, a single user row is auto-created. In multi-tenant mode, users register via magic link authentication. The `slug` determines email subdomain routing (e.g., `ann` → `*@ann.keepread.app`).
+
+| Field        | Type            | Description                                          |
+|--------------|-----------------|------------------------------------------------------|
+| `id`         | TEXT (UUID)     | Primary key                                          |
+| `email`      | TEXT (unique)   | User's email address                                 |
+| `slug`       | TEXT (unique)   | URL-safe identifier (3-30 chars, lowercase + hyphens)|
+| `name`       | TEXT            | Display name (nullable)                              |
+| `avatar_url` | TEXT            | Profile image URL (nullable)                         |
+| `is_admin`   | INTEGER (bool)  | Whether this user has admin privileges               |
+| `is_active`  | INTEGER (bool)  | Whether this account is active (default: 1)          |
+| `created_at` | TEXT (ISO 8601) | Account creation time                                |
+| `updated_at` | TEXT (ISO 8601) | Last update time                                     |
+
 #### Document
 
 The universal content entity. Every piece of saved content — regardless of format or origin — is stored as a row in this table. Type-specific fields are nullable where not applicable.
@@ -181,6 +197,7 @@ The universal content entity. Every piece of saved content — regardless of for
 | Field                  | Type            | Description                                                      |
 |------------------------|-----------------|------------------------------------------------------------------|
 | `id`                   | TEXT (UUID)     | Primary key                                                      |
+| `user_id`              | TEXT (FK)       | References `user`. Owner of this document                        |
 | `type`                 | TEXT            | One of: `article`, `pdf`, `email`, `rss`, `bookmark`, `post`     |
 | `url`                  | TEXT            | Original URL (nullable for email-only content)                   |
 | `title`                | TEXT            | Document title / email subject / post heading                    |
@@ -987,6 +1004,27 @@ Every API request must be authenticated. There are no unauthenticated endpoints 
 
 **Success Criteria:** User has fully replaced Readwise Reader with Focus Reader for daily use.
 
+### Multi-Tenancy Support (COMPLETE — schema and query layer)
+
+**Goal:** Support multiple independent users with isolated data on a shared D1 database.
+
+**Deliverables (complete):**
+
+- `user` table with email, slug, admin flag
+- `user_id` column on all primary entity tables (document, tag, feed, subscription, highlight, collection, api_key, feed_token, saved_view, denylist, ingestion_log, ingestion_report_daily)
+- `UserScopedDb` type wrapper — every query function enforces `WHERE user_id = ?`
+- Auth middleware returns `userId`; single-user mode auto-authenticates as sole user
+- Email worker and RSS worker route documents to correct user
+- All 457 tests passing with multi-tenant schema
+
+**Deliverables (planned):**
+
+- Magic link email authentication
+- Session cookies with signed JWTs
+- User registration and login UI
+- Per-user email subdomains (`*@slug.keepread.app`)
+- R2 storage key namespacing (`u/<userId>/...`)
+
 ### Phase 4 — Intelligence Layer
 
 **Goal:** AI-assisted organization and summarization.
@@ -1039,6 +1077,7 @@ Every API request must be authenticated. There are no unauthenticated endpoints 
 
 ### 8.5 Security
 
+- **Row-level user isolation.** Every primary table has a `user_id` column. All queries enforce `WHERE user_id = ?` via the `UserScopedDb` type wrapper — the TypeScript compiler catches any missed callsite.
 - **No unauthenticated endpoints.** Every HTTP endpoint requires authentication. There are zero anonymous API routes.
 - **UI and API routes:** Protected by Cloudflare Access (zero-trust) for browser sessions, and by API key (Bearer token) for programmatic access. See Section 6.12 for details.
 - **Email Worker:** Not a public HTTP route; triggered by Cloudflare's email routing infrastructure. Rate-limit and validate inbound messages.

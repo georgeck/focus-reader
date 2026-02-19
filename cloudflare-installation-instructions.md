@@ -1,6 +1,9 @@
-# Focus Reader: Cloudflare Installation Wiki (Self-Hosted)
+# Focus Reader: Cloudflare Installation Guide
 
-This guide is for someone deploying Focus Reader to their own Cloudflare account.
+This guide covers deploying Focus Reader to Cloudflare. Focus Reader supports two deployment modes:
+
+- **Single-user mode** (`AUTH_MODE=single-user`, default) — Self-hosted on your own Cloudflare account. A sole user is auto-created and all requests are authenticated automatically. No login page needed.
+- **Multi-user mode** (`AUTH_MODE=multi-user`) — Multiple independent users with row-level data isolation on a shared D1 database. Requires full authentication (session cookie, CF Access JWT, or API key).
 
 ## 1. What You Are Deploying
 
@@ -22,7 +25,7 @@ Shared data services:
 2. Cloudflare D1 enabled.
 3. Cloudflare R2 enabled.
 4. Cloudflare Email Routing enabled (if using newsletter ingestion).
-5. Cloudflare Access / Zero Trust enabled (recommended for auth).
+5. Cloudflare Access / Zero Trust enabled (recommended for single-user mode; required for multi-user mode if not using magic link auth).
 6. Node.js 20+.
 7. `pnpm` 10+.
 8. `wrangler` CLI authenticated to your account (`wrangler login`).
@@ -67,6 +70,7 @@ Update these files with your own Cloudflare values:
 | `apps/web/wrangler.toml`          | `EMAIL_DOMAIN` var        | Your email subdomain (e.g. `yourdomain.com`)  |
 | `apps/email-worker/wrangler.toml` | `EMAIL_DOMAIN` var        | Same as above                                 |
 | `apps/email-worker/wrangler.toml` | `COLLAPSE_PLUS_ALIAS` var | `true` or `false`                             |
+| `apps/web/wrangler.toml`          | `AUTH_MODE` var           | `single-user` (default) or `multi-user`       |
 | All 4 wrangler.toml files         | `database_id`             | Your D1 database ID                           |
 | All 4 wrangler.toml files         | `database_name`           | Only if you changed it from `focus-reader-db` |
 | `apps/web/wrangler.toml`          | R2 `bucket_name` values   | Only if you changed bucket names              |
@@ -91,15 +95,16 @@ Required secrets (set via Wrangler):
 ```bash
 cd apps/web
 wrangler secret put OWNER_EMAIL
-wrangler secret put CF_ACCESS_TEAM_DOMAIN
-wrangler secret put CF_ACCESS_AUD
+wrangler secret put CF_ACCESS_TEAM_DOMAIN   # optional in single-user mode
+wrangler secret put CF_ACCESS_AUD           # optional in single-user mode
 ```
 
 Notes:
 
 1. `CF_ACCESS_TEAM_DOMAIN` and `CF_ACCESS_AUD` enable Cloudflare Access JWT verification.
-2. `OWNER_EMAIL` locks browser access to a single identity.
-3. If `CF_ACCESS_*` are not set, API routes allow requests without CF Access (dev/single-user mode). Do not do this on a public domain.
+2. `OWNER_EMAIL` is used to auto-create the sole user in single-user mode. Required for both modes.
+3. **Single-user mode** (`AUTH_MODE=single-user`, default): If `CF_ACCESS_*` are not set, all requests are automatically authenticated as the sole user (created from `OWNER_EMAIL`). Safe for private deployments behind a VPN or local network.
+4. **Multi-user mode** (`AUTH_MODE=multi-user`): Full authentication is required on every request. Set up CF Access or implement session-based auth.
 
 ### 6.2 Email worker (`apps/email-worker`)
 
@@ -119,16 +124,32 @@ cp .dev.vars.example apps/email-worker/.dev.vars
 EMAIL_DOMAIN=read.yourdomain.com COLLAPSE_PLUS_ALIAS=false OWNER_EMAIL=you@example.com ./scripts/sync-secrets.sh
 ```
 
-## 7. Set Up Cloudflare Access (Recommended)
+## 7. Set Up Authentication
+
+### Option A: Single-User Mode (Default)
+
+No additional auth setup is needed. Set `AUTH_MODE=single-user` (or leave it unset — this is the default) in your `wrangler.toml` vars. The app will auto-create a user from `OWNER_EMAIL` and authenticate all requests as that user.
+
+For extra security, you can optionally add Cloudflare Access in front of the web domain.
+
+### Option B: Cloudflare Access (Recommended for Production)
 
 Create a Cloudflare Access application for your web domain:
 
 1. Add your app domain (example: `reader.yourdomain.com`)
 2. Add an allow policy for your identity/email
 3. Copy the Access Audience (AUD) value
-4. Set `CF_ACCESS_TEAM_DOMAIN`.
-5. Set `CF_ACCESS_AUD`.
-6. Set `OWNER_EMAIL` (recommended single-user lock).
+4. Set `CF_ACCESS_TEAM_DOMAIN` secret
+5. Set `CF_ACCESS_AUD` secret
+6. Set `OWNER_EMAIL` secret
+
+### Option C: Multi-User Mode
+
+For multi-tenant SaaS deployments with multiple independent users:
+
+1. Set `AUTH_MODE=multi-user` in `wrangler.toml` vars for all three workers
+2. Set up CF Access or implement magic link authentication (planned feature)
+3. Each user gets their own isolated data — documents, tags, feeds, subscriptions, highlights, collections, and settings are all scoped by `user_id`
 
 ## 8. Set Up Email Routing (Optional but Recommended)
 
@@ -224,7 +245,22 @@ pnpm --filter focus-reader-email-worker dev
 
 Local dev uses `.wrangler/state/v3` for D1 and R2 persistence. The `initOpenNextCloudflareForDev` helper in `next.config.ts` provides Cloudflare bindings in the Next.js dev server.
 
-## 13. Upgrade Procedure
+## 13. Database Schema
+
+Focus Reader uses D1 migrations in `packages/db/migrations/`:
+
+| Migration | Description |
+|---|---|
+| `0001_initial_schema.sql` | Core tables: document, subscription, feed, tag, highlight, collection, etc. |
+| `0002_fts5_search.sql` | FTS5 full-text search virtual table |
+| `0003_highlight_collection_indexes.sql` | Performance indexes for highlights and collections |
+| `0004_multi_tenancy.sql` | `user` table, `user_id` columns on all primary tables, composite indexes |
+
+The multi-tenancy migration (`0004`) adds a `user` table and a `user_id` column to all primary entity tables (document, tag, feed, subscription, highlight, collection, api_key, feed_token, saved_view, denylist, ingestion_log, ingestion_report_daily). Tables with column-level `UNIQUE` constraints (tag, subscription, feed, denylist) are recreated with `UNIQUE(user_id, ...)` composite constraints.
+
+In single-user mode, a sole user row is auto-created on first request. In multi-user mode, users are created through the registration flow.
+
+## 14. Upgrade Procedure
 
 When pulling new versions:
 
@@ -239,7 +275,7 @@ pnpm test
 
 Always apply migrations before traffic expects new schema (the deploy script does this automatically).
 
-## 14. Common Issues and Fixes
+## 15. Common Issues and Fixes
 
 ### Issue: API routes return 500 and bindings are undefined
 
@@ -310,15 +346,16 @@ Fix:
 1. Open extension options
 2. Re-save API URL and accept permission prompt
 
-## 15. Security Recommendations
+## 16. Security Recommendations
 
-1. Always front the web app with Cloudflare Access in production.
-2. Set `OWNER_EMAIL` to restrict browser access to your identity.
-3. Use API keys only for automation/extension.
-4. Rotate API keys periodically.
-5. Keep your wrangler secrets out of git.
+1. Always front the web app with Cloudflare Access in production (or use `AUTH_MODE=single-user` behind a VPN).
+2. Set `OWNER_EMAIL` — required for single-user mode auto-creation.
+3. In multi-user mode, every query is scoped by `user_id` via the `UserScopedDb` type wrapper. Users cannot access each other's data.
+4. Use API keys only for automation/extension. Each API key is scoped to its creator's `user_id`.
+5. Rotate API keys periodically.
+6. Keep your wrangler secrets out of git.
 
-## 16. Quick Reference Commands
+## 17. Quick Reference Commands
 
 ```bash
 # Full deploy

@@ -1,6 +1,6 @@
 # Focus Reader
 
-A self-hosted, open-source read-it-later application that unifies web articles, email newsletters, RSS feeds, PDFs, and bookmarks into a single distraction-free reading interface. Deployed to your own Cloudflare account (Workers, D1, R2) — you own your data.
+An open-source read-it-later application that unifies web articles, email newsletters, RSS feeds, PDFs, and bookmarks into a single distraction-free reading interface. Deploy to your own Cloudflare account in single-user mode, or run as a multi-tenant SaaS — you own your data.
 
 ## Features
 
@@ -19,6 +19,7 @@ A self-hosted, open-source read-it-later application that unifies web articles, 
 - **API key management** — Create API keys for programmatic access.
 - **Sender denylist** — Block unwanted senders by email pattern.
 - **Ingestion log** — Track email processing results and errors.
+- **Multi-tenancy** — Row-level user isolation via `user_id` on all primary tables. Supports single-user self-hosted mode (auto-authenticates as sole user) and multi-user SaaS mode with independent, isolated data per user.
 
 ## Architecture
 
@@ -45,6 +46,7 @@ scripts/
 All data lives in your Cloudflare account:
 - **D1** (SQLite) — Documents, subscriptions, feeds, tags, saved views, API keys, metadata
 - **R2** (object storage) — PDF files, inline email images, and attachments
+- **User isolation** — Every primary table includes a `user_id` column. A `UserScopedDb` type wrapper ensures all queries are automatically scoped to the authenticated user.
 
 ## Prerequisites
 
@@ -195,14 +197,17 @@ Environment variables (set in `wrangler.toml`, `.dev.vars`, or as Wrangler secre
 | `OWNER_EMAIL`           | Owner email for auth verification                  | —                     |
 | `CF_ACCESS_TEAM_DOMAIN` | Cloudflare Access team domain (omit for dev mode)  | —                     |
 | `CF_ACCESS_AUD`         | Cloudflare Access audience tag (omit for dev mode) | —                     |
+| `AUTH_MODE`             | `single-user` (self-hosted) or `multi-user` (SaaS)    | `single-user`         |
 
-When `CF_ACCESS_TEAM_DOMAIN` and `CF_ACCESS_AUD` are not set, authentication is disabled (dev mode passthrough).
+When `AUTH_MODE=single-user` (default), a sole user is auto-created and all requests are authenticated as that user. In `multi-user` mode, full authentication is required via session cookie, CF Access JWT, or API key.
 
 ## Project Status
 
 - **Phase 0** (complete) — Email ingestion pipeline: parse, sanitize, store, deduplicate
 - **Phase 1** (complete) — REST API, web reading interface, search, tags, subscriptions
 - **Phase 2** (complete) — RSS feeds, OPML import/export, browser extension, PDF upload, saved views, API keys, denylist, ingestion log
+- **Phase 3** (complete) — Highlights, collections, reading preferences, data export
+- **Multi-tenancy** (complete — schema/query layer) — Row-level user isolation, `UserScopedDb` type, `user` table, all queries scoped by `user_id`
 
 ## License
 

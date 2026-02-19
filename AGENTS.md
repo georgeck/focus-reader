@@ -1,6 +1,6 @@
 # Agents Guide
 
-Focus Reader is a self-hosted read-it-later app deployed on Cloudflare (Workers, D1, R2, Pages), ingesting content from email newsletters, web articles, RSS feeds, and bookmarks into a unified reading interface. Phases 0–3 are complete.
+Focus Reader is a read-it-later app that supports both self-hosted single-user and multi-tenant SaaS deployments, deployed on Cloudflare (Workers, D1, R2, Pages), ingesting content from email newsletters, web articles, RSS feeds, and bookmarks into a unified reading interface. Phases 0–3 are complete.
 
 ## Build & Test
 
@@ -37,7 +37,8 @@ focus-reader/
 ## Quick Reference
 
 - **Entity types:** `packages/shared/src/types.ts` (D1 conventions: `number` for bools, `string` for timestamps/UUIDs)
-- **Query helpers:** `packages/db/src/queries/` — every function takes `db: D1Database` as first param
+- **Query helpers:** `packages/db/src/queries/` — every function takes `ctx: UserScopedDb` as first param (dependency injection with row-level user isolation). Admin/worker queries in `packages/db/src/queries/admin.ts` use raw `D1Database` for cross-tenant operations.
+- **Multi-tenancy:** `packages/db/src/scoped-db.ts` — `UserScopedDb` wrapper type (`{ db: D1Database, userId: string }`). Every query adds `WHERE user_id = ?` automatically. See `packages/db/src/queries/admin.ts` for cross-tenant worker queries.
 - **API pattern:** `apps/web/src/app/api/` routes are thin wrappers around `@focus-reader/api` business logic
 - **Sanitization:** `packages/parser/src/sanitize.ts` — manual linkedom walker (NOT DOMPurify)
 
@@ -46,6 +47,7 @@ focus-reader/
 - **vitest** pinned to `~3.2.0` — `@cloudflare/vitest-pool-workers` does NOT support vitest 4.x
 - **No DOMPurify** — incompatible with Workers. Use the manual linkedom sanitizer in `packages/parser/src/sanitize.ts`
 - **D1 foreign keys** NOT enforced in production — implement cascading deletes at the application level
+- **`UserScopedDb` everywhere** — all query/API functions require `UserScopedDb`, not raw `D1Database`. The TypeScript compiler catches missed callsites. Only admin queries (`admin.ts`) and child-entity queries (`email-meta.ts`, `pdf-meta.ts`, `attachments.ts`) use `D1Database` directly.
 - **Always `pnpm build` before `pnpm test`** — tests depend on `^build` in turbo.json
 - **Import paths** use `.js` extensions (ESM convention)
 
@@ -77,3 +79,4 @@ All phases complete (0–3):
 - [Phase 1](agents/plans/phase-1-plan.md) — MVP Reader (steps 6–9)
 - [Phase 2](agents/plans/phase-2-plan.md) — RSS, Search, Extension, Auth (steps 10–20)
 - [Phase 3](agents/plans/phase-3-plan.md) — Highlights, Collections, Preferences, Export (steps 21–28)
+- [Phase 4 — Multi-Tenancy](agents/plans/) — Row-level user isolation, `UserScopedDb` type, schema migration (steps 1–8)

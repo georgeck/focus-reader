@@ -33,6 +33,10 @@
 
 6. **ReadableStream consumption** — Streams can only be read once. The email worker reads `message.raw` into an ArrayBuffer before the retry loop to avoid "stream already locked" errors on retry.
 
+7. **Multi-tenancy test setup** — All integration tests (db, email-worker, rss-worker) must apply `MULTI_TENANCY_SQL` migration in addition to `INITIAL_SCHEMA_SQL` and `FTS5_MIGRATION_SQL`. Create a test user row before running tests. Use `scopeDb(env.FOCUS_DB, TEST_USER_ID)` to get a `UserScopedDb` context — do not pass raw `D1Database` to query functions.
+
+8. **Web API test mocks** — When mocking `@focus-reader/db` in web API tests, use `importOriginal` to preserve real exports like `scopeDb`: `vi.mock("@focus-reader/db", async (importOriginal) => { const actual = await importOriginal(); return { ...actual, myMockedFn: vi.fn() }; })`. The `authenticateRequest` mock must return `userId: "test-user-id"`, and assertions on API/query calls should use `expect.objectContaining({ db: mockDb, userId: "test-user-id" })` for the `UserScopedDb` parameter.
+
 ## Test Fixtures
 
 - `packages/parser/fixtures/` — `.eml` files for parser unit tests (read via `readFileSync` in Node.js)

@@ -22,11 +22,17 @@ All entity interfaces live in `packages/shared/src/types.ts`. D1 conventions:
 
 Input types (e.g., `CreateDocumentInput`) have optional fields with defaults applied in query helpers.
 
+All primary entity types (Document, Tag, Feed, Subscription, Highlight, Collection, etc.) include a `user_id: string` field for row-level multi-tenant isolation.
+
 `CreateDocumentInput.id` is optional — when provided, the caller controls the UUID (needed for pre-generating document IDs for CID image R2 paths).
 
 ## Query Helpers
 
-All in `packages/db/src/queries/`. Every function takes `db: D1Database` as its first parameter (dependency injection).
+All in `packages/db/src/queries/`. Every function takes `ctx: UserScopedDb` as its first parameter — a wrapper containing `{ db: D1Database, userId: string }` defined in `packages/db/src/scoped-db.ts`. All queries automatically scope by `user_id`.
+
+**Exceptions** that take raw `D1Database`:
+- `packages/db/src/queries/admin.ts` — cross-tenant worker queries (e.g., `getAllFeedsDueForPoll`, `getOrCreateSingleUser`)
+- Child-entity queries (`email-meta.ts`, `pdf-meta.ts`, `attachments.ts`) — scoped via parent `document_id` FK, not directly by `user_id`
 
 ## HTML Sanitization
 

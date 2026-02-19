@@ -10,6 +10,8 @@
 Environment variables:
 - `EMAIL_DOMAIN` — Catch-all email subdomain (e.g., `read.yourdomain.com`)
 - `COLLAPSE_PLUS_ALIAS` — `"true"` or `"false"`, controls plus-alias collapsing
+- `OWNER_EMAIL` — Owner email for auto-creating the sole user in single-user mode
+- `AUTH_MODE` — `single-user` (default, self-hosted) or `multi-user` (SaaS with full authentication)
 
 ## Starting Dev Servers
 
@@ -59,3 +61,14 @@ Without both, all API routes will return 500 errors because bindings are undefin
 ## D1 Constraints
 
 - **Foreign keys are NOT enforced** in production. Implement cascading deletes at the application level.
+
+## Multi-Tenancy
+
+All primary entity tables have a `user_id TEXT NOT NULL` column. The migration `0004_multi_tenancy.sql` creates the `user` table and adds `user_id` to existing tables.
+
+When applying migrations locally:
+```bash
+pnpm --filter @focus-reader/db wrangler d1 migrations apply focus-reader-db --local
+```
+
+The `user` table is required for all operations — even in single-user mode, a user row is auto-created on first request via `getOrCreateSingleUser()`.

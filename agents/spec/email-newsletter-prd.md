@@ -16,7 +16,7 @@ Email newsletters are a valuable source of curated information, but subscribing 
 
 **Focus Reader** is a self-hosted system that provides a dedicated ingestion pipeline for email newsletters using pseudo email addresses, converts them into clean readable formats (HTML and Markdown), and presents them in an RSS-reader-like interface with support for tagging, categorization, and search.
 
-> **Definition of "self-hosted":** In this context, self-hosted means deploying the application to an individual's own Cloudflare account (using Workers, D1, Pages, etc.) in a single-tenant, non-SaaS configuration. The user owns and operates the infrastructure; there is no shared multi-tenant service.
+> **Definition of "self-hosted":** The application can be deployed in single-user mode to an individual's own Cloudflare account, or operated as a multi-tenant SaaS where multiple users share the same D1 database with row-level data isolation. In both modes, all email newsletter data is scoped to the owning user.
 
 ### 1.3 Goals
 
@@ -29,7 +29,7 @@ Email newsletters are a valuable source of curated information, but subscribing 
 ### 1.4 Non-Goals
 
 - This is not a general-purpose email client.
-- This is not a collaborative or multi-tenant SaaS product (v1 targets single-user, self-hosted use).
+- ~~This is not a collaborative or multi-tenant SaaS product.~~ Multi-tenancy is now supported with row-level user isolation. Each user's subscriptions, documents, and settings are fully independent.
 - This does not handle transactional or marketing email beyond newsletters.
 - This does not provide email sending capabilities.
 
@@ -37,7 +37,7 @@ Email newsletters are a valuable source of curated information, but subscribing 
 
 ## 2. Target User
 
-A single power user (the system operator) who subscribes to many email newsletters, values organized reading workflows, and is comfortable self-hosting a lightweight application.
+In single-user mode, a self-hosting power user. In multi-tenant mode, multiple independent users. The typical user subscribes to many email newsletters, values organized reading workflows, and wants a dedicated reading interface separate from their inbox.
 
 ---
 

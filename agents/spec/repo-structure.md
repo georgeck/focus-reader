@@ -145,7 +145,9 @@ Build/test:
 Purpose:
 
 - Canonical D1 migrations
-- Typed query helpers for all entities
+- Typed query helpers for all entities (scoped by `UserScopedDb`)
+- `UserScopedDb` type wrapper (`scoped-db.ts`)
+- Admin/cross-tenant queries (`admin.ts`)
 - Schema/table constants
 
 Current migrations:
@@ -153,6 +155,7 @@ Current migrations:
 - `0001_initial_schema.sql`
 - `0002_fts5_search.sql`
 - `0003_highlight_collection_indexes.sql`
+- `0004_multi_tenancy.sql`
 
 Important query modules include:
 
@@ -160,6 +163,7 @@ Important query modules include:
 - `subscriptions`, `feeds`, `tags`, `highlights`
 - `collections`, `user-preferences`
 - `search`, `saved-views`, `api-keys`, `denylist`, `ingestion-log`
+- `admin` (cross-tenant worker queries), `scoped-db` (UserScopedDb type)
 
 Build/test:
 
@@ -202,6 +206,8 @@ Current modules include:
 - `highlights`, `collections`, `user-preferences`, `export`
 - `search`, `saved-views`, `api-keys`
 - `denylist`, `auth`
+
+All API module functions take `ctx: UserScopedDb` as their first parameter instead of raw `D1Database`.
 
 Build/test:
 
@@ -363,6 +369,7 @@ Notes:
 - `OWNER_EMAIL`
 - `CF_ACCESS_TEAM_DOMAIN`
 - `CF_ACCESS_AUD`
+- `AUTH_MODE`
 
 ---
 
