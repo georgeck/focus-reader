@@ -4,7 +4,10 @@
  * Supports auth methods:
  * 1. Cloudflare Access JWT — for browser sessions (cookie: CF_Authorization)
  * 2. API key — for programmatic access (header: Authorization: Bearer <key>)
- * 3. Single-user auto-auth — when AUTH_MODE=single-user or no CF config
+ * 3. Single-user auto-auth — only when CF Access is NOT configured
+ *
+ * If CF Access env vars are set, they are enforced — no auto-auth fallback.
+ * Auto-auth only applies when CF Access is not configured (local dev, simple deploys).
  */
 import {
   getUserByEmail,
@@ -127,24 +130,25 @@ export async function authenticateRequest(
     AUTH_MODE?: string;
   }
 ): Promise<AuthResult> {
-  const isSingleUser = env.AUTH_MODE === "single-user";
+  const cfAccessConfigured = !!(env.CF_ACCESS_TEAM_DOMAIN && env.CF_ACCESS_AUD);
 
   // 1. Try Cloudflare Access JWT from cookie
   const cookieHeader = request.headers.get("cookie") || "";
   const cfAuthMatch = cookieHeader.match(/CF_Authorization=([^;]+)/);
-  if (cfAuthMatch && env.CF_ACCESS_TEAM_DOMAIN && env.CF_ACCESS_AUD) {
+  if (cfAuthMatch && cfAccessConfigured) {
     const jwt = cfAuthMatch[1];
     const result = await validateCfAccessJwt(
       jwt,
-      env.CF_ACCESS_TEAM_DOMAIN,
-      env.CF_ACCESS_AUD
+      env.CF_ACCESS_TEAM_DOMAIN!,
+      env.CF_ACCESS_AUD!
     );
     if (result.valid && result.email) {
       const user = await getUserByEmail(db, result.email);
       if (user) {
         return { authenticated: true, userId: user.id, method: "cf-access" };
       }
-      if (isSingleUser) {
+      // In single-user mode, auto-create the user from CF Access email
+      if (env.AUTH_MODE !== "multi-user") {
         const created = await getOrCreateSingleUser(db, result.email);
         return { authenticated: true, userId: created.id, method: "cf-access" };
       }
@@ -163,8 +167,9 @@ export async function authenticateRequest(
     return { authenticated: false, error: "Invalid API key" };
   }
 
-  // 3. Single-user mode or no CF config: auto-authenticate as sole user
-  if (isSingleUser || (!env.CF_ACCESS_TEAM_DOMAIN && !env.CF_ACCESS_AUD)) {
+  // 3. Auto-auth as sole user — only when CF Access is NOT configured.
+  // If CF Access is configured, missing/invalid JWT must result in 401.
+  if (!cfAccessConfigured) {
     const email = env.OWNER_EMAIL || "owner@localhost";
     const user = await getOrCreateSingleUser(db, email);
     return { authenticated: true, userId: user.id, method: "single-user" };

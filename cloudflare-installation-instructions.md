@@ -5,8 +5,50 @@ This guide covers deploying Focus Reader to Cloudflare. Focus Reader supports tw
 - **Single-user mode** (`AUTH_MODE=single-user`, default) — Self-hosted on your own Cloudflare account. A sole user is auto-created and all requests are authenticated automatically. No login page needed.
 - **Multi-user mode** (`AUTH_MODE=multi-user`) — Multiple independent users with row-level data isolation on a shared D1 database. Requires full authentication (session cookie, CF Access JWT, or API key).
 
-## Introduction
-TBD - write what the user needs to have - domain name, email address, decide on authentication mode (single vs. multi-user)
+## Configuration Matrix
+
+### Environment Variables and Secrets by Mode
+
+The table below shows every configuration value, where it is set, and whether it is required in each deployment scenario.
+
+| Variable                | Set via                         | Single-user (local dev)             | Single-user (production) | Multi-user (production)                 |
+|-------------------------|---------------------------------|-------------------------------------|--------------------------|-----------------------------------------|
+| `EMAIL_DOMAIN`          | `wrangler.toml` `[vars]`        | Optional                            | Required                 | Required                                |
+| `COLLAPSE_PLUS_ALIAS`   | `wrangler.toml` `[vars]`        | Optional (`"false"`)                | Optional (`"false"`)     | Optional (`"false"`)                    |
+| `AUTH_MODE`             | `wrangler.toml` `[vars]`        | Not set (defaults to `single-user`) | Not set or `single-user` | **`multi-user`**                        |
+| `OWNER_EMAIL`           | `wrangler secret` / `.dev.vars` | Optional (`owner@localhost`)        | **Required**             | **Required** (creates first admin user) |
+| `CF_ACCESS_TEAM_DOMAIN` | `wrangler secret` / `.dev.vars` | Not set                             | Recommended              | Recommended                             |
+| `CF_ACCESS_AUD`         | `wrangler secret` / `.dev.vars` | Not set                             | Recommended              | Recommended                             |
+
+### Authentication Behavior by Mode
+
+| Scenario                                 | What happens on each request                                                                                                                                         |
+|------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **No CF Access configured** (any mode)   | All requests auto-authenticate as the sole user (created from `OWNER_EMAIL` or `owner@localhost`). No login page. This is the default local dev experience.          |
+| **CF Access configured, valid JWT**      | JWT is validated. In single-user mode, the user is looked up or auto-created from the JWT email. In multi-user mode, the user must already exist — no auto-creation. |
+| **CF Access configured, no/invalid JWT** | Falls through to API key check. If no valid API key either → **401 rejected**. No auto-auth fallback when CF Access is configured.                                   |
+| **API key** (any mode)                   | `Authorization: Bearer <key>` header is hashed and looked up. API keys are scoped to their creator's `user_id`. Works regardless of CF Access configuration.         |
+
+### Auth Resolution Order
+
+The `authenticateRequest()` function tries these methods in order:
+
+1. **CF Access JWT** — reads `CF_Authorization` cookie, validates against `CF_ACCESS_TEAM_DOMAIN`/`CF_ACCESS_AUD`, looks up user by email
+2. **API key** — reads `Authorization: Bearer <key>` header, hashes key, looks up `api_key` row (which contains `user_id`)
+3. **Auto-auth fallback** — **only when CF Access is NOT configured** (`CF_ACCESS_TEAM_DOMAIN` and `CF_ACCESS_AUD` not set). Auto-creates/returns the sole user from `OWNER_EMAIL`.
+
+If CF Access is configured, step 3 never runs. Missing or invalid JWT with no API key → 401.
+
+### Local Dev vs. Production Summary
+
+| Aspect             | Local dev                                                        | Production                                                                                                                        |
+|--------------------|------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------|
+| **Config files**   | `.dev.vars` in each app directory                                | `wrangler secret put` for secrets; `wrangler.toml` `[vars]` for non-secrets                                                       |
+| **D1 database**    | Local SQLite via Miniflare (`.wrangler/state/v3`)                | Remote Cloudflare D1                                                                                                              |
+| **R2 storage**     | Local filesystem via Miniflare                                   | Remote Cloudflare R2                                                                                                              |
+| **Migrations**     | `pnpm db:migrate` (applies locally)                              | `deploy.sh` applies automatically, or manual: `wrangler d1 migrations apply FOCUS_DB --remote --config packages/db/wrangler.toml` |
+| **Auth (default)** | Auto-auth as `owner@localhost` (no setup needed)                 | Set `OWNER_EMAIL` + optionally CF Access                                                                                          |
+| **Persistence**    | Shared at `../../.wrangler/state/v3` across web and email-worker | Cloudflare-managed                                                                                                                |
 
 ## 1. What You Are Deploying
 
@@ -108,10 +150,10 @@ wrangler secret put CF_ACCESS_AUD           # optional in single-user mode
 
 Notes:
 
-1. `CF_ACCESS_TEAM_DOMAIN` and `CF_ACCESS_AUD` enable Cloudflare Access JWT verification.
-2. `OWNER_EMAIL` is used to auto-create the single user in single-user mode. Required for both modes.
-3. **Single-user mode** (`AUTH_MODE=single-user`, default): If `CF_ACCESS_*` are not set, all requests are automatically authenticated as the single user (created from `OWNER_EMAIL`). Safe for private deployments behind a VPN or local network.
-4. **Multi-user mode** (`AUTH_MODE=multi-user`): Full authentication is required on every request. Set up CF Access or implement session-based auth.
+1. `CF_ACCESS_TEAM_DOMAIN` and `CF_ACCESS_AUD` enable Cloudflare Access JWT verification. When set, CF Access is **enforced** — requests without a valid JWT or API key are rejected with 401.
+2. `OWNER_EMAIL` is used to auto-create the sole user when CF Access is not configured. Required for production.
+3. **Without CF Access** (default local dev): All requests auto-authenticate as the sole user (created from `OWNER_EMAIL`). Safe for private deployments behind a VPN or local network.
+4. **With CF Access**: JWT validation is enforced. Set `CF_ACCESS_TEAM_DOMAIN` and `CF_ACCESS_AUD` as secrets. Missing/invalid JWT without API key → 401.
 
 ### 6.2 Email worker (`apps/email-worker`)
 
@@ -132,6 +174,20 @@ cp .dev.vars.example apps/email-worker/.dev.vars
 # Option 2: Use the sync script
 EMAIL_DOMAIN=read.yourdomain.com COLLAPSE_PLUS_ALIAS=false OWNER_EMAIL=you@example.com ./scripts/sync-secrets.sh
 ```
+
+### Which Workers Need Which Variables
+
+| Variable                        | `web`        | `email-worker` | `rss-worker` | `db` (migrations only) |
+|---------------------------------|--------------|----------------|--------------|------------------------|
+| `EMAIL_DOMAIN`                  | Yes          | Yes            | —            | —                      |
+| `COLLAPSE_PLUS_ALIAS`           | —            | Yes            | —            | —                      |
+| `AUTH_MODE`                     | Yes          | Yes            | —            | —                      |
+| `OWNER_EMAIL`                   | Yes (secret) | Yes (secret)   | —            | —                      |
+| `CF_ACCESS_TEAM_DOMAIN`         | Yes (secret) | —              | —            | —                      |
+| `CF_ACCESS_AUD`                 | Yes (secret) | —              | —            | —                      |
+| `FOCUS_DB` (D1 binding)         | Yes          | Yes            | Yes          | Yes                    |
+| `FOCUS_STORAGE` (R2 binding)    | Yes          | Yes            | —            | —                      |
+| `NEXT_INC_CACHE_R2_BUCKET` (R2) | Yes          | —              | —            | —                      |
 
 ## 7. Set Up Authentication
 
