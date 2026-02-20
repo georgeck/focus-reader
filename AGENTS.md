@@ -40,6 +40,7 @@ focus-reader/
 - **Query helpers:** `packages/db/src/queries/` — every function takes `ctx: UserScopedDb` as first param (dependency injection with row-level user isolation). Admin/worker queries in `packages/db/src/queries/admin.ts` use raw `D1Database` for cross-tenant operations.
 - **Multi-tenancy:** `packages/db/src/scoped-db.ts` — `UserScopedDb` wrapper type (`{ db: D1Database, userId: string }`). Every query adds `WHERE user_id = ?` automatically. See `packages/db/src/queries/admin.ts` for cross-tenant worker queries.
 - **API pattern:** `apps/web/src/app/api/` routes are thin wrappers around `@focus-reader/api` business logic
+- **Authentication:** Mode-scoped via `AUTH_MODE` env var. `multi-user`: Better Auth magic-link sessions + API keys (see `apps/web/src/lib/better-auth.ts`, `apps/web/src/lib/auth-middleware.ts`). `single-user`: auto-auth with optional CF Access + API keys (see `packages/api/src/auth.ts`). Resolution order in `resolveAuthUser()` → `withAuth()` wrapper on all API routes.
 - **Sanitization:** `packages/parser/src/sanitize.ts` — manual linkedom walker (NOT DOMPurify)
 
 ## Key Constraints
@@ -79,4 +80,5 @@ All phases complete (0–3):
 - [Phase 1](agents/plans/phase-1-plan.md) — MVP Reader (steps 6–9)
 - [Phase 2](agents/plans/phase-2-plan.md) — RSS, Search, Extension, Auth (steps 10–20)
 - [Phase 3](agents/plans/phase-3-plan.md) — Highlights, Collections, Preferences, Export (steps 21–28)
+- [Phase 3 — Hybrid Auth](agents/plans/phase-3-hybrid-auth-plan.md) — Mode-scoped authentication: Better Auth magic-link for multi-user, CF Access/auto-auth for single-user, API keys in both modes
 - [Phase 4 — Multi-Tenancy](agents/plans/) — Row-level user isolation, `UserScopedDb` type, schema migration (steps 1–8)

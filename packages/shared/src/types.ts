@@ -21,6 +21,7 @@ export type IngestionStatus = "success" | "failure";
 export interface User {
   id: string;
   email: string;
+  email_verified: number;
   slug: string;
   name: string | null;
   avatar_url: string | null;

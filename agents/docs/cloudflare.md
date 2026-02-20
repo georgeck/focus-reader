@@ -11,7 +11,13 @@ Environment variables:
 - `EMAIL_DOMAIN` — Catch-all email subdomain (e.g., `read.yourdomain.com`)
 - `COLLAPSE_PLUS_ALIAS` — `"true"` or `"false"`, controls plus-alias collapsing
 - `OWNER_EMAIL` — Owner email for auto-creating the sole user in single-user mode
-- `AUTH_MODE` — `single-user` (default, self-hosted) or `multi-user` (SaaS with full authentication)
+- `AUTH_MODE` — `single-user` (default, self-hosted) or `multi-user` (SaaS with Better Auth magic-link sessions)
+- `AUTH_SECRET` — Secret for Better Auth session signing (required in `multi-user`)
+- `BETTER_AUTH_URL` — Base URL for Better Auth endpoints (required in `multi-user`)
+- `RESEND_API_KEY` — Resend API key for magic-link emails (required in `multi-user`; omit for console logging in local dev)
+- `RESEND_FROM_EMAIL` — Sender address for magic-link emails (required in `multi-user`)
+- `CF_ACCESS_TEAM_DOMAIN` — Optional CF Access team domain (single-user perimeter auth)
+- `CF_ACCESS_AUD` — Optional CF Access audience tag (single-user perimeter auth)
 
 ## Starting Dev Servers
 
@@ -64,7 +70,7 @@ Without both, all API routes will return 500 errors because bindings are undefin
 
 ## Multi-Tenancy
 
-All primary entity tables have a `user_id TEXT NOT NULL` column. The migration `0004_multi_tenancy.sql` creates the `user` table and adds `user_id` to existing tables.
+All primary entity tables have a `user_id TEXT NOT NULL` column. The migration `0004_multi_tenancy.sql` creates the `user` table and adds `user_id` to existing tables. The migration `0005_auth_hybrid.sql` adds `email_verified` to the `user` table and creates the `session` and `verification` tables for Better Auth.
 
 When applying migrations locally:
 ```bash

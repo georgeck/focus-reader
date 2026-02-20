@@ -82,6 +82,8 @@ vi.mock("@/lib/bindings", () => ({
     FOCUS_DB: mockDb,
     FOCUS_STORAGE: mockR2,
     EMAIL_DOMAIN: "read.example.com",
+    AUTH_SECRET: "test-auth-secret",
+    BETTER_AUTH_URL: "http://localhost:3000",
     ...envOverrides,
   })),
   getR2: vi.fn(async () => mockR2),

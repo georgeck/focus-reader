@@ -16,28 +16,39 @@ The table below shows every configuration value, where it is set, and whether it
 | `EMAIL_DOMAIN`          | `wrangler.toml` `[vars]`        | Optional                            | Required                 | Required                                |
 | `COLLAPSE_PLUS_ALIAS`   | `wrangler.toml` `[vars]`        | Optional (`"false"`)                | Optional (`"false"`)     | Optional (`"false"`)                    |
 | `AUTH_MODE`             | `wrangler.toml` `[vars]`        | Not set (defaults to `single-user`) | Not set or `single-user` | **`multi-user`**                        |
-| `OWNER_EMAIL`           | `wrangler secret` / `.dev.vars` | Optional (`owner@localhost`)        | **Required**             | **Required** (creates first admin user) |
-| `CF_ACCESS_TEAM_DOMAIN` | `wrangler secret` / `.dev.vars` | Not set                             | Recommended              | Recommended                             |
-| `CF_ACCESS_AUD`         | `wrangler secret` / `.dev.vars` | Not set                             | Recommended              | Recommended                             |
+| `BETTER_AUTH_URL`       | `wrangler.toml` `[vars]`        | Not set                             | Not set                  | **Required** (public app URL for magic links) |
+| `OWNER_EMAIL`           | `wrangler secret` / `.dev.vars` | Optional (`owner@localhost`)        | **Required**             | Not used                                |
+| `AUTH_SECRET`           | `wrangler secret` / `.dev.vars` | Not set                             | Not set                  | **Required** (session signing secret)   |
+| `RESEND_API_KEY`        | `wrangler secret` / `.dev.vars` | Not set                             | Not set                  | **Required** (magic-link email sender)  |
+| `RESEND_FROM_EMAIL`     | `wrangler secret` / `.dev.vars` | Not set                             | Not set                  | **Required** (verified sender address)  |
+| `CF_ACCESS_TEAM_DOMAIN` | `wrangler secret` / `.dev.vars` | Not set                             | Recommended              | Not used                                |
+| `CF_ACCESS_AUD`         | `wrangler secret` / `.dev.vars` | Not set                             | Recommended              | Not used                                |
 
 ### Authentication Behavior by Mode
 
-| Scenario                                 | What happens on each request                                                                                                                                         |
-|------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **No CF Access configured** (any mode)   | All requests auto-authenticate as the sole user (created from `OWNER_EMAIL` or `owner@localhost`). No login page. This is the default local dev experience.          |
-| **CF Access configured, valid JWT**      | JWT is validated. In single-user mode, the user is looked up or auto-created from the JWT email. In multi-user mode, the user must already exist — no auto-creation. |
-| **CF Access configured, no/invalid JWT** | Falls through to API key check. If no valid API key either → **401 rejected**. No auto-auth fallback when CF Access is configured.                                   |
-| **API key** (any mode)                   | `Authorization: Bearer <key>` header is hashed and looked up. API keys are scoped to their creator's `user_id`. Works regardless of CF Access configuration.         |
+| Scenario                                        | What happens on each request                                                                                                                               |
+|-------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **`multi-user` mode, valid session cookie**     | Better Auth session (`fr_session` cookie) is validated. User looked up by session. This is the primary browser auth for multi-user.                         |
+| **`multi-user` mode, no session**               | Falls through to API key check. If no valid API key → **401 rejected**. CF Access cookies are ignored in multi-user mode.                                  |
+| **`single-user` mode, no CF Access configured** | All requests auto-authenticate as the sole user (created from `OWNER_EMAIL` or `owner@localhost`). No login page. This is the default local dev experience.|
+| **`single-user` mode, CF Access configured**    | CF Access JWT validated. User looked up or auto-created from JWT email. Missing/invalid JWT falls through to API key, then **401** (no auto-auth fallback).|
+| **API key** (any mode)                          | `Authorization: Bearer <key>` header is hashed and looked up. API keys are scoped to their creator's `user_id`. Works regardless of mode.                  |
 
 ### Auth Resolution Order
 
-The `authenticateRequest()` function tries these methods in order:
+Authentication is mode-scoped. The `resolveAuthUser()` function in the web app (`apps/web/src/lib/auth-middleware.ts`) tries methods in order:
 
-1. **CF Access JWT** — reads `CF_Authorization` cookie, validates against `CF_ACCESS_TEAM_DOMAIN`/`CF_ACCESS_AUD`, looks up user by email
-2. **API key** — reads `Authorization: Bearer <key>` header, hashes key, looks up `api_key` row (which contains `user_id`)
-3. **Auto-auth fallback** — **only when CF Access is NOT configured** (`CF_ACCESS_TEAM_DOMAIN` and `CF_ACCESS_AUD` not set). Auto-creates/returns the sole user from `OWNER_EMAIL`.
+**`AUTH_MODE=multi-user`:**
+1. **Better Auth session** — reads `fr_session` cookie, validates via Better Auth, looks up user
+2. **API key** — reads `Authorization: Bearer <key>` header, hashes key, looks up `api_key` row
+3. Otherwise → **401**
 
-If CF Access is configured, step 3 never runs. Missing or invalid JWT with no API key → 401.
+**`AUTH_MODE=single-user`:**
+1. **CF Access JWT** (if configured) — reads `CF_Authorization` cookie, validates against `CF_ACCESS_TEAM_DOMAIN`/`CF_ACCESS_AUD`, looks up/creates user by email
+2. **API key** — reads `Authorization: Bearer <key>` header
+3. **Auto-auth fallback** — **only when CF Access is NOT configured**. Auto-creates/returns the sole user from `OWNER_EMAIL`.
+
+If CF Access is configured in single-user mode, step 3 never runs. Missing or invalid JWT with no API key → 401.
 
 ### Local Dev vs. Production Summary
 
@@ -70,10 +81,11 @@ Shared data services:
 2. Cloudflare D1 enabled.
 3. Cloudflare R2 enabled.
 4. Cloudflare Email Routing enabled (if using newsletter ingestion).
-5. Cloudflare Access / Zero Trust enabled (recommended for single-user mode; required for multi-user mode if not using magic link auth).
-6. Node.js 20+.
-7. `pnpm` 10+.
-8. `wrangler` CLI.
+5. Cloudflare Access / Zero Trust enabled (optional, recommended for single-user production deployments).
+6. [Resend](https://resend.com) account with a verified sender domain (required for multi-user mode magic-link emails).
+7. Node.js 20+.
+8. `pnpm` 10+.
+9. `wrangler` CLI.
 
 ## 3. Clone and Install
 
@@ -139,21 +151,29 @@ Note: `account_id` is only required in `apps/web/wrangler.toml`. The other worke
 
 Required environment variable is `EMAIL_DOMAIN` and is set under `[vars]` entry in `wrangler.toml` (updated in step 5).
 
-Required secrets (set via Wrangler):
+Secrets for **single-user mode** (set via Wrangler):
 
 ```bash
 cd apps/web
 wrangler secret put OWNER_EMAIL
-wrangler secret put CF_ACCESS_TEAM_DOMAIN   # optional in single-user mode
-wrangler secret put CF_ACCESS_AUD           # optional in single-user mode
+wrangler secret put CF_ACCESS_TEAM_DOMAIN   # optional, enables CF Access perimeter auth
+wrangler secret put CF_ACCESS_AUD           # optional, pair with CF_ACCESS_TEAM_DOMAIN
+```
+
+Additional secrets for **multi-user mode**:
+
+```bash
+cd apps/web
+wrangler secret put AUTH_SECRET             # generate with: openssl rand -base64 32
+wrangler secret put RESEND_API_KEY          # from your Resend dashboard
+wrangler secret put RESEND_FROM_EMAIL       # verified sender address in Resend
 ```
 
 Notes:
 
-1. `CF_ACCESS_TEAM_DOMAIN` and `CF_ACCESS_AUD` enable Cloudflare Access JWT verification. When set, CF Access is **enforced** — requests without a valid JWT or API key are rejected with 401.
-2. `OWNER_EMAIL` is used to auto-create the sole user when CF Access is not configured. Required for production.
-3. **Without CF Access** (default local dev): All requests auto-authenticate as the sole user (created from `OWNER_EMAIL`). Safe for private deployments behind a VPN or local network.
-4. **With CF Access**: JWT validation is enforced. Set `CF_ACCESS_TEAM_DOMAIN` and `CF_ACCESS_AUD` as secrets. Missing/invalid JWT without API key → 401.
+1. **Single-user without CF Access** (default local dev): All requests auto-authenticate as the sole user (created from `OWNER_EMAIL`). Safe for private deployments behind a VPN or local network.
+2. **Single-user with CF Access**: JWT validation is enforced. Set `CF_ACCESS_TEAM_DOMAIN` and `CF_ACCESS_AUD` as secrets. Missing/invalid JWT without API key → 401.
+3. **Multi-user**: Better Auth session cookies (`fr_session`) via magic-link email. CF Access is not used for identity in this mode. Requires `AUTH_SECRET`, `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, and `BETTER_AUTH_URL` (set in `wrangler.toml` `[vars]`).
 
 ### 6.2 Email worker (`apps/email-worker`)
 
@@ -177,17 +197,21 @@ EMAIL_DOMAIN=read.yourdomain.com COLLAPSE_PLUS_ALIAS=false OWNER_EMAIL=you@examp
 
 ### Which Workers Need Which Variables
 
-| Variable                        | `web`        | `email-worker` | `rss-worker` | `db` (migrations only) |
-|---------------------------------|--------------|----------------|--------------|------------------------|
-| `EMAIL_DOMAIN`                  | Yes          | Yes            | —            | —                      |
-| `COLLAPSE_PLUS_ALIAS`           | —            | Yes            | —            | —                      |
-| `AUTH_MODE`                     | Yes          | Yes            | —            | —                      |
-| `OWNER_EMAIL`                   | Yes (secret) | Yes (secret)   | —            | —                      |
-| `CF_ACCESS_TEAM_DOMAIN`         | Yes (secret) | —              | —            | —                      |
-| `CF_ACCESS_AUD`                 | Yes (secret) | —              | —            | —                      |
-| `FOCUS_DB` (D1 binding)         | Yes          | Yes            | Yes          | Yes                    |
-| `FOCUS_STORAGE` (R2 binding)    | Yes          | Yes            | —            | —                      |
-| `NEXT_INC_CACHE_R2_BUCKET` (R2) | Yes          | —              | —            | —                      |
+| Variable                        | `web`                  | `email-worker` | `rss-worker` | `db` (migrations only) |
+|---------------------------------|------------------------|----------------|--------------|------------------------|
+| `EMAIL_DOMAIN`                  | Yes                    | Yes            | —            | —                      |
+| `COLLAPSE_PLUS_ALIAS`           | —                      | Yes            | —            | —                      |
+| `AUTH_MODE`                     | Yes                    | Yes            | —            | —                      |
+| `BETTER_AUTH_URL`               | Yes (multi-user only)  | —              | —            | —                      |
+| `OWNER_EMAIL`                   | Yes (secret)           | Yes (secret)   | —            | —                      |
+| `AUTH_SECRET`                   | Yes (secret, multi-user only) | —       | —            | —                      |
+| `RESEND_API_KEY`                | Yes (secret, multi-user only) | —       | —            | —                      |
+| `RESEND_FROM_EMAIL`             | Yes (secret, multi-user only) | —       | —            | —                      |
+| `CF_ACCESS_TEAM_DOMAIN`         | Yes (secret, optional) | —              | —            | —                      |
+| `CF_ACCESS_AUD`                 | Yes (secret, optional) | —              | —            | —                      |
+| `FOCUS_DB` (D1 binding)         | Yes                    | Yes            | Yes          | Yes                    |
+| `FOCUS_STORAGE` (R2 binding)    | Yes                    | Yes            | —            | —                      |
+| `NEXT_INC_CACHE_R2_BUCKET` (R2) | Yes                    | —              | —            | —                      |
 
 ## 7. Set Up Authentication
 
@@ -210,12 +234,18 @@ Create a Cloudflare Access application for your web domain:
 
 ### Option C: Multi-User Mode
 
-For multi-tenant SaaS deployments with multiple independent users:
+For multi-tenant SaaS deployments with multiple independent users using magic-link email authentication:
 
-1. Set `AUTH_MODE=multi-user` in `wrangler.toml` vars for all three workers
-2. Set up CF Access as explained in Option B above
-3. Another option is to implement magic link authentication (not yet implemented)
-4. Each user gets their own isolated data — documents, tags, feeds, subscriptions, highlights, collections, and settings are all scoped by `user_id`
+1. Set `AUTH_MODE=multi-user` in `wrangler.toml` `[vars]` for the web worker
+2. Set `BETTER_AUTH_URL` in `wrangler.toml` `[vars]` to your public app URL (e.g., `https://reader.yourdomain.com`)
+3. Set secrets via `wrangler secret put`:
+   - `AUTH_SECRET` — generate with `openssl rand -base64 32`
+   - `RESEND_API_KEY` — from your [Resend](https://resend.com) dashboard
+   - `RESEND_FROM_EMAIL` — a verified sender address in Resend (e.g., `noreply@yourdomain.com`)
+4. Deploy. Users visit `/login`, enter their email, receive a magic link, and click to sign in. New users are auto-created on first successful verification.
+5. Each user gets their own isolated data — documents, tags, feeds, subscriptions, highlights, collections, and settings are all scoped by `user_id`
+6. CF Access is **not used** for identity in multi-user mode. You may still place CF Access in front of the domain as a general access gate, but the app identity comes from Better Auth sessions.
+7. API keys work in multi-user mode for browser extension and automation use cases
 
 ## 8. Set Up Email Routing (Optional but Recommended)
 
@@ -321,10 +351,11 @@ Focus Reader uses D1 migrations in `packages/db/migrations/`:
 | `0002_fts5_search.sql`                  | FTS5 full-text search virtual table                                         |
 | `0003_highlight_collection_indexes.sql` | Performance indexes for highlights and collections                          |
 | `0004_multi_tenancy.sql`                | `user` table, `user_id` columns on all primary tables, composite indexes    |
+| `0005_auth_hybrid.sql`                  | `email_verified` on user, `session` and `verification` tables for Better Auth |
 
-The multi-tenancy migration (`0004`) adds a `user` table and a `user_id` column to all primary entity tables (document, tag, feed, subscription, highlight, collection, api_key, feed_token, saved_view, denylist, ingestion_log, ingestion_report_daily). Tables with column-level `UNIQUE` constraints (tag, subscription, feed, denylist) are recreated with `UNIQUE(user_id, ...)` composite constraints.
+The multi-tenancy migration (`0004`) adds a `user` table and a `user_id` column to all primary entity tables. The auth hybrid migration (`0005`) adds `email_verified` to the `user` table and creates `session` and `verification` tables used by Better Auth for magic-link authentication in multi-user mode.
 
-In single-user mode, a sole user row is auto-created on first request. In multi-user mode, users are created through the registration flow.
+In single-user mode, a sole user row is auto-created on first request. In multi-user mode, users are created through the magic-link verification flow.
 
 ## 14. Upgrade Procedure
 
@@ -420,12 +451,13 @@ Fix:
 
 ## 16. Security Recommendations
 
-1. Always front the web app with Cloudflare Access in production (or use `AUTH_MODE=single-user` behind a VPN).
-2. Set `OWNER_EMAIL` — required for single-user mode auto-creation.
-3. In multi-user mode, every query is scoped by `user_id` via the `UserScopedDb` type wrapper. Users cannot access each other's data.
-4. Use API keys only for automation/extension. Each API key is scoped to its creator's `user_id`.
-5. Rotate API keys periodically.
-6. Keep your wrangler secrets out of git.
+1. **Single-user production**: Front the web app with Cloudflare Access, or deploy behind a VPN.
+2. **Multi-user production**: Use a strong random `AUTH_SECRET` (at least 32 bytes). Magic-link tokens are hashed and one-time use with 15-minute expiry. Session cookies are `HttpOnly`, `Secure`, `SameSite=Lax`.
+3. Set `OWNER_EMAIL` in single-user mode — required for auto-creation.
+4. In multi-user mode, every query is scoped by `user_id` via the `UserScopedDb` type wrapper. Users cannot access each other's data.
+5. Use API keys only for automation/extension. Each API key is scoped to its creator's `user_id`.
+6. Rotate API keys periodically.
+7. Keep your wrangler secrets out of git — use `wrangler secret put` for `AUTH_SECRET`, `RESEND_API_KEY`, etc.
 
 ## 17. Quick Reference Commands
 

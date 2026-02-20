@@ -12,6 +12,19 @@ COLLAPSE_PLUS_ALIAS=false
 # Owner email — used to verify Cloudflare Access identity
 OWNER_EMAIL=you@example.com
 
+# Auth mode: single-user (default) or multi-user
+# AUTH_MODE=single-user
+
+# Session/magic-link signing secret (required for multi-user mode)
+# AUTH_SECRET=change-me
+
+# Public app URL used in magic links (required for multi-user mode)
+# BETTER_AUTH_URL=http://localhost:3000
+
+# Transactional email sender for magic links (optional in local dev)
+# RESEND_API_KEY=re_xxx
+# RESEND_FROM_EMAIL=noreply@example.com
+
 # Cloudflare Access (omit both to disable auth in local dev)
 # CF_ACCESS_TEAM_DOMAIN=your-team
 # CF_ACCESS_AUD=your-audience-tag

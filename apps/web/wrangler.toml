@@ -12,6 +12,8 @@ binding = "ASSETS"
 
 [vars]
 EMAIL_DOMAIN = "level-up.dev"
+AUTH_MODE = "single-user"
+BETTER_AUTH_URL = "https://reader.level-up.dev"
 
 [[d1_databases]]
 binding = "FOCUS_DB"

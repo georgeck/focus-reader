@@ -2,12 +2,13 @@
  * Authentication module for Focus Reader.
  *
  * Supports auth methods:
- * 1. Cloudflare Access JWT — for browser sessions (cookie: CF_Authorization)
- * 2. API key — for programmatic access (header: Authorization: Bearer <key>)
+ * 1. Cloudflare Access JWT — single-user mode browser auth (cookie: CF_Authorization)
+ * 2. API key — programmatic auth in all modes (header: Authorization: Bearer <key>)
  * 3. Single-user auto-auth — only when CF Access is NOT configured
  *
- * If CF Access env vars are set, they are enforced — no auto-auth fallback.
- * Auto-auth only applies when CF Access is not configured (local dev, simple deploys).
+ * AUTH_MODE behavior:
+ * - multi-user: API key only (session auth is handled in web app layer)
+ * - single-user/default: CF Access and/or auto-auth fallback
  */
 import {
   getUserByEmail,
@@ -131,12 +132,13 @@ export async function authenticateRequest(
     AUTH_MODE?: string;
   }
 ): Promise<AuthResult> {
+  const authMode = env.AUTH_MODE === "multi-user" ? "multi-user" : "single-user";
   const cfAccessConfigured = !!(env.CF_ACCESS_TEAM_DOMAIN && env.CF_ACCESS_AUD);
 
-  // 1. Try Cloudflare Access JWT from cookie
+  // 1. In single-user mode, try Cloudflare Access JWT from cookie
   const cookieHeader = request.headers.get("cookie") || "";
   const cfAuthMatch = cookieHeader.match(/CF_Authorization=([^;]+)/);
-  if (cfAuthMatch && cfAccessConfigured) {
+  if (authMode === "single-user" && cfAuthMatch && cfAccessConfigured) {
     const jwt = cfAuthMatch[1];
     const result = await validateCfAccessJwt(
       jwt,
@@ -169,9 +171,8 @@ export async function authenticateRequest(
     return { authenticated: false, error: "Invalid API key" };
   }
 
-  // 3. Auto-auth as sole user — only when CF Access is NOT configured.
-  // If CF Access is configured, missing/invalid JWT must result in 401.
-  if (!cfAccessConfigured) {
+  // 3. In single-user mode, auto-auth as sole user only when CF Access is not configured.
+  if (authMode === "single-user" && !cfAccessConfigured) {
     const email = env.OWNER_EMAIL || "owner@localhost";
     const user = await getOrCreateSingleUser(db, email);
     return { authenticated: true, userId: user.id, method: "single-user" };

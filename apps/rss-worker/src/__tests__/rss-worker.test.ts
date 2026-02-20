@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { env, fetchMock } from "cloudflare:test";
-import { INITIAL_SCHEMA_SQL, FTS5_MIGRATION_SQL, MULTI_TENANCY_SQL } from "@focus-reader/db/migration-sql";
+import { INITIAL_SCHEMA_SQL, FTS5_MIGRATION_SQL, MULTI_TENANCY_SQL, AUTH_HYBRID_SQL } from "@focus-reader/db/migration-sql";
 import { createFeed, createTag, addTagToFeed, scopeDb } from "@focus-reader/db";
 import type { UserScopedDb } from "@focus-reader/db";
 import worker from "../index.js";
@@ -73,7 +73,7 @@ async function resetDatabase(db: D1Database) {
     await db.prepare(`DROP TABLE IF EXISTS ${table}`).run();
   }
 
-  const allSql = INITIAL_SCHEMA_SQL + "\n" + FTS5_MIGRATION_SQL + "\n" + MULTI_TENANCY_SQL;
+  const allSql = INITIAL_SCHEMA_SQL + "\n" + FTS5_MIGRATION_SQL + "\n" + MULTI_TENANCY_SQL + "\n" + AUTH_HYBRID_SQL;
   const statements = allSql
     .split(";")
     .map((s) => s.trim())

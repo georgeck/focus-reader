@@ -8,6 +8,10 @@ interface Env {
   CF_ACCESS_TEAM_DOMAIN?: string;
   CF_ACCESS_AUD?: string;
   AUTH_MODE?: string;
+  AUTH_SECRET?: string;
+  BETTER_AUTH_URL?: string;
+  RESEND_API_KEY?: string;
+  RESEND_FROM_EMAIL?: string;
 }
 
 export async function getEnv(): Promise<Env> {

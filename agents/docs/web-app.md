@@ -12,7 +12,10 @@ The web app (`apps/web`) is a Next.js 15 App Router application deployed to Clou
 - **Keyboard shortcuts** registered via `useKeyboardShortcuts` hook; respects input focus (disabled in inputs/textareas)
 - **Command palette** (`Cmd+K`) with navigation, actions (add URL, create collection, highlights, export), and settings commands
 - **Article extraction** for bookmarks uses `@mozilla/readability` + linkedom in `packages/parser/src/article.ts`
-- **Authentication:** `withAuth()` resolves the user via (in order): session cookie, CF Access JWT, API key bearer token, or single-user auto-auth. Returns `userId` which is used to create `UserScopedDb` for all downstream queries. Controlled by `AUTH_MODE` env var (`single-user` | `multi-user`)
+- **Authentication:** `withAuth()` calls `resolveAuthUser()` (`src/lib/auth-middleware.ts`) which is mode-scoped via `AUTH_MODE`:
+  - `multi-user`: Better Auth session cookie (`fr_session`) first, then API key bearer token. CF Access is ignored. Session management handled by Better Auth (`src/lib/better-auth.ts`) with magic-link plugin. Auth pages at `(auth)/login` and `(auth)/verify`. `UserProvider` (`src/lib/user-context.tsx`) redirects unauthenticated users to `/login`.
+  - `single-user`: CF Access JWT (if configured), then API key, then auto-auth as sole owner. No login redirect.
+  - Returns `userId` which is used to create `UserScopedDb` for all downstream queries.
 
 ## API Error Format
 

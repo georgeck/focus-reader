@@ -16,3 +16,4 @@ export * from "./queries/highlights.js";
 export * from "./queries/collections.js";
 export * from "./queries/user-preferences.js";
 export * from "./queries/admin.js";
+export * from "./queries/auth-session.js";

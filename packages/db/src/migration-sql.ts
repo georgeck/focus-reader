@@ -394,3 +394,32 @@ INSERT INTO ingestion_report_daily_new (report_date, total_events, success_count
 DROP TABLE ingestion_report_daily;
 ALTER TABLE ingestion_report_daily_new RENAME TO ingestion_report_daily;
 `;
+
+// Auto-generated from migrations/0005_auth_hybrid.sql
+export const AUTH_HYBRID_SQL = `
+ALTER TABLE user ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0;
+
+CREATE TABLE IF NOT EXISTS session (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  token_hash TEXT NOT NULL UNIQUE,
+  expires_at TEXT NOT NULL,
+  ip_address TEXT,
+  user_agent TEXT,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS idx_session_user_id ON session(user_id);
+CREATE INDEX IF NOT EXISTS idx_session_expires_at ON session(expires_at);
+
+CREATE TABLE IF NOT EXISTS verification (
+  id TEXT PRIMARY KEY,
+  identifier TEXT NOT NULL UNIQUE,
+  value_hash TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  used_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS idx_verification_expires_at ON verification(expires_at);
+`;

@@ -4,17 +4,11 @@ import type { NextRequest } from "next/server";
 /**
  * Auth middleware for Focus Reader.
  *
- * In production with Cloudflare Access configured:
- * - Browser requests are authenticated via CF_Authorization cookie
- * - API requests can use Authorization: Bearer <key> header
+ * Auth is enforced in route handlers (`withAuth`) where mode-specific
+ * resolution happens (session/cf-access/api-key/single-user fallback).
  *
- * When CF Access env vars are not set (local dev):
- * - All requests are allowed through
- *
- * Note: Full JWT validation happens server-side in the API routes
- * via authenticateRequest(). This middleware provides a quick check
- * for the presence of auth credentials and rejects obviously
- * unauthenticated API requests early.
+ * This middleware only performs a light presence check for common auth cookies
+ * and bearer tokens; it intentionally does not validate credentials.
  */
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -24,20 +18,15 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Check for CF Access cookie or Authorization header
+  // Check for app session / CF Access cookies or Authorization header
+  const hasSession = request.cookies.has("fr_session");
   const hasCfAuth = request.cookies.has("CF_Authorization");
   const hasApiKey = request.headers
     .get("authorization")
     ?.startsWith("Bearer ");
 
-  // If neither auth method is present, check if we should enforce
-  // In dev mode (no CF Access), allow all requests through
-  if (!hasCfAuth && !hasApiKey) {
-    // We can't check env vars in Edge middleware, so we allow through
-    // and let the route handler do the full auth check.
-    // This middleware is a fast-fail for missing Bearer tokens on
-    // programmatic API calls, but CF Access browser flow is always
-    // validated server-side.
+  if (!hasSession && !hasCfAuth && !hasApiKey) {
+    // Route handlers make the final auth decision.
     return NextResponse.next();
   }
 

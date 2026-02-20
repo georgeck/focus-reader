@@ -16,6 +16,8 @@ export const Tables = {
   SAVED_VIEW: "saved_view",
   USER_PREFERENCES: "user_preferences",
   INGESTION_REPORT_DAILY: "ingestion_report_daily",
+  SESSION: "session",
+  VERIFICATION: "verification",
   // Join tables
   DOCUMENT_TAGS: "document_tags",
   SUBSCRIPTION_TAGS: "subscription_tags",

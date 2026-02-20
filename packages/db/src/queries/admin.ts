@@ -64,29 +64,79 @@ export async function getOrCreateSingleUser(
   if (existing) {
     return existing;
   }
-  return createUserByEmail(db, email, true);
+  return createUserByEmail(db, email, true, true);
+}
+
+export function normalizeSlugBase(email: string): string {
+  const localPart = email.split("@")[0] ?? "user";
+  let slug = localPart
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+
+  if (!slug) slug = "user";
+  if (slug.length < 3) slug = `user-${slug}`;
+  if (slug.length > 30) slug = slug.slice(0, 30);
+  slug = slug.replace(/-+$/g, "");
+  if (slug.length < 3) slug = "user";
+  return slug;
+}
+
+export async function generateUniqueSlug(db: D1Database, email: string): Promise<string> {
+  const base = normalizeSlugBase(email);
+
+  for (let i = 0; i < 1000; i++) {
+    const suffix = i === 0 ? "" : `-${i + 1}`;
+    const maxBaseLength = 30 - suffix.length;
+    const trimmedBase = base.slice(0, Math.max(1, maxBaseLength)).replace(/-+$/g, "");
+    const candidateBase = trimmedBase.length >= 3 ? trimmedBase : "user";
+    const candidate = `${candidateBase}${suffix}`;
+    const existing = await getUserBySlug(db, candidate);
+    if (!existing) return candidate;
+  }
+
+  // Should be unreachable in practice, but guarantees a unique fallback.
+  return `user-${crypto.randomUUID().slice(0, 8)}`;
 }
 
 export async function createUserByEmail(
   db: D1Database,
   email: string,
-  isAdmin = false
+  isAdmin = false,
+  emailVerified = true
 ): Promise<User> {
   // Check if user already exists for this email
   const existing = await db
     .prepare("SELECT * FROM user WHERE email = ?1")
     .bind(email)
     .first<User>();
-  if (existing) return existing;
+  if (existing) {
+    if (emailVerified && existing.email_verified !== 1) {
+      await db
+        .prepare(
+          `UPDATE user
+           SET email_verified = 1, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+           WHERE id = ?1`
+        )
+        .bind(existing.id)
+        .run();
+      return {
+        ...existing,
+        email_verified: 1,
+      };
+    }
+    return existing;
+  }
 
   const id = crypto.randomUUID();
-  const slug = email.split("@")[0].toLowerCase().replace(/[^a-z0-9-]/g, "-").slice(0, 30);
+  const slug = await generateUniqueSlug(db, email);
   await db
     .prepare(
-      `INSERT INTO user (id, email, slug, is_admin, is_active)
-       VALUES (?1, ?2, ?3, ?4, 1)`
+      `INSERT INTO user (id, email, email_verified, slug, is_admin, is_active)
+       VALUES (?1, ?2, ?3, ?4, ?5, 1)`
     )
-    .bind(id, email, slug, isAdmin ? 1 : 0)
+    .bind(id, email, emailVerified ? 1 : 0, slug, isAdmin ? 1 : 0)
     .run();
   return (await db
     .prepare("SELECT * FROM user WHERE id = ?1")

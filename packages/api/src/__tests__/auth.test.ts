@@ -112,6 +112,36 @@ describe("authenticateRequest", () => {
     });
   });
 
+  describe("multi-user mode auth behavior", () => {
+    it("does not auto-authenticate when no credentials are provided", async () => {
+      const db = createMockDb();
+      const request = createRequest();
+      const result = await authenticateRequest(db, request, {
+        AUTH_MODE: "multi-user",
+      });
+
+      expect(result.authenticated).toBe(false);
+      expect(result.error).toBe("Authentication required");
+    });
+
+    it("ignores CF Access cookie path and only uses API key", async () => {
+      const db = createMockDb({ keyResult: { id: "key-123", user_id: "user-1" } });
+      const request = createRequest({
+        cookie: "CF_Authorization=some.jwt.token",
+        authorization: "Bearer valid-api-key",
+      });
+      const result = await authenticateRequest(db, request, {
+        AUTH_MODE: "multi-user",
+        CF_ACCESS_TEAM_DOMAIN: "myteam",
+        CF_ACCESS_AUD: "aud123",
+      });
+
+      expect(result.authenticated).toBe(true);
+      expect(result.method).toBe("api-key");
+      expect(result.userId).toBe("user-1");
+    });
+  });
+
   describe("CF Access JWT path", () => {
     it("attempts JWT validation when CF_Authorization cookie is present", async () => {
       const db = createMockDb();

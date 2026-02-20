@@ -5,6 +5,7 @@ import { SWRConfig } from "swr";
 import { AppProvider } from "@/contexts/app-context";
 import { AppShell } from "@/components/layout/app-shell";
 import { apiFetch } from "@/lib/api-client";
+import { UserProvider } from "@/lib/user-context";
 
 export default function ReaderLayout({
   children,
@@ -18,11 +19,13 @@ export default function ReaderLayout({
         revalidateOnFocus: false,
       }}
     >
-      <AppProvider>
-        <Suspense>
-          <AppShell>{children}</AppShell>
-        </Suspense>
-      </AppProvider>
+      <UserProvider>
+        <AppProvider>
+          <Suspense>
+            <AppShell>{children}</AppShell>
+          </Suspense>
+        </AppProvider>
+      </UserProvider>
     </SWRConfig>
   );
 }
