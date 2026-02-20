@@ -17,10 +17,10 @@ The table below shows every configuration value, where it is set, and whether it
 | `COLLAPSE_PLUS_ALIAS`   | `wrangler.toml` `[vars]`        | Optional (`"false"`)                | Optional (`"false"`)     | Optional (`"false"`)                          |
 | `AUTH_MODE`             | `wrangler.toml` `[vars]`        | Not set (defaults to `single-user`) | Not set or `single-user` | **`multi-user`**                              |
 | `BETTER_AUTH_URL`       | `wrangler.toml` `[vars]`        | Not set                             | Not set                  | **Required** (public app URL for magic links) |
+| `RESEND_FROM_EMAIL`     | `wrangler.toml` `[vars]`        | Not set                             | Not set                  | **Required** (verified sender address)        |
+| `RESEND_API_KEY`        | `wrangler secret` / `.dev.vars` | Not set                             | Not set                  | **Required** (magic-link email sender)        |
 | `OWNER_EMAIL`           | `wrangler secret` / `.dev.vars` | Optional (`owner@localhost`)        | **Required**             | Not used                                      |
 | `AUTH_SECRET`           | `wrangler secret` / `.dev.vars` | Not set                             | Not set                  | **Required** (session signing secret)         |
-| `RESEND_API_KEY`        | `wrangler secret` / `.dev.vars` | Not set                             | Not set                  | **Required** (magic-link email sender)        |
-| `RESEND_FROM_EMAIL`     | `wrangler secret` / `.dev.vars` | Not set                             | Not set                  | **Required** (verified sender address)        |
 | `CF_ACCESS_TEAM_DOMAIN` | `wrangler secret` / `.dev.vars` | Not set                             | Recommended              | Not used                                      |
 | `CF_ACCESS_AUD`         | `wrangler secret` / `.dev.vars` | Not set                             | Recommended              | Not used                                      |
 
@@ -149,10 +149,11 @@ Note: `account_id` is only required in `apps/web/wrangler.toml`. The other worke
 
 ### 6.1 Web app (`apps/web`)
 
+For **single-user mode**:
+
 Required environment variable is `EMAIL_DOMAIN` and is set under `[vars]` entry in `wrangler.toml` (updated in step 5).
 
-Secrets for **single-user mode** (set via Wrangler):
-
+Secrets are set via `wrangler` CLI:
 ```bash
 cd apps/web
 wrangler secret put OWNER_EMAIL
@@ -160,13 +161,16 @@ wrangler secret put CF_ACCESS_TEAM_DOMAIN   # optional, enables CF Access perime
 wrangler secret put CF_ACCESS_AUD           # optional, pair with CF_ACCESS_TEAM_DOMAIN
 ```
 
-Additional secrets for **multi-user mode**:
+For **multi-user mode**:
 
+Required environment variable are:
+`AUTH_MODE` and `RESEND_FROM_EMAIL`. They are set under `[vars]` entry in `wrangler.toml` (updated in step 5).
+
+Secrets are set via `wrangler` CLI:
 ```bash
 cd apps/web
 wrangler secret put AUTH_SECRET             # generate with: openssl rand -base64 32
 wrangler secret put RESEND_API_KEY          # from your Resend dashboard
-wrangler secret put RESEND_FROM_EMAIL       # verified sender address in Resend
 ```
 
 Notes:
@@ -174,6 +178,7 @@ Notes:
 1. **Single-user without CF Access** (default local dev): All requests auto-authenticate as the sole user (created from `OWNER_EMAIL`). Safe for private deployments behind a VPN or local network.
 2. **Single-user with CF Access**: JWT validation is enforced. Set `CF_ACCESS_TEAM_DOMAIN` and `CF_ACCESS_AUD` as secrets. Missing/invalid JWT without API key → 401.
 3. **Multi-user**: Better Auth session cookies (`fr_session`) via magic-link email. CF Access is not used for identity in this mode. Requires `AUTH_SECRET`, `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, and `BETTER_AUTH_URL` (set in `wrangler.toml` `[vars]`).
+4. Disable CF Access for multi-user (CF access is used only for single-user)
 
 ### 6.2 Email worker (`apps/email-worker`)
 

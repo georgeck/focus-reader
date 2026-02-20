@@ -6,7 +6,7 @@ compatibility_flags = ["nodejs_compat"]
 [vars]
 EMAIL_DOMAIN = "level-up.dev"
 COLLAPSE_PLUS_ALIAS = "true"
-AUTH_MODE = "single-user"
+AUTH_MODE = "multi-user"
 
 [observability]
 enabled = true
