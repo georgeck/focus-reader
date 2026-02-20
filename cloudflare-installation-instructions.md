@@ -11,28 +11,28 @@ This guide covers deploying Focus Reader to Cloudflare. Focus Reader supports tw
 
 The table below shows every configuration value, where it is set, and whether it is required in each deployment scenario.
 
-| Variable                | Set via                         | Single-user (local dev)             | Single-user (production) | Multi-user (production)                 |
-|-------------------------|---------------------------------|-------------------------------------|--------------------------|-----------------------------------------|
-| `EMAIL_DOMAIN`          | `wrangler.toml` `[vars]`        | Optional                            | Required                 | Required                                |
-| `COLLAPSE_PLUS_ALIAS`   | `wrangler.toml` `[vars]`        | Optional (`"false"`)                | Optional (`"false"`)     | Optional (`"false"`)                    |
-| `AUTH_MODE`             | `wrangler.toml` `[vars]`        | Not set (defaults to `single-user`) | Not set or `single-user` | **`multi-user`**                        |
+| Variable                | Set via                         | Single-user (local dev)             | Single-user (production) | Multi-user (production)                       |
+|-------------------------|---------------------------------|-------------------------------------|--------------------------|-----------------------------------------------|
+| `EMAIL_DOMAIN`          | `wrangler.toml` `[vars]`        | Optional                            | Required                 | Required                                      |
+| `COLLAPSE_PLUS_ALIAS`   | `wrangler.toml` `[vars]`        | Optional (`"false"`)                | Optional (`"false"`)     | Optional (`"false"`)                          |
+| `AUTH_MODE`             | `wrangler.toml` `[vars]`        | Not set (defaults to `single-user`) | Not set or `single-user` | **`multi-user`**                              |
 | `BETTER_AUTH_URL`       | `wrangler.toml` `[vars]`        | Not set                             | Not set                  | **Required** (public app URL for magic links) |
-| `OWNER_EMAIL`           | `wrangler secret` / `.dev.vars` | Optional (`owner@localhost`)        | **Required**             | Not used                                |
-| `AUTH_SECRET`           | `wrangler secret` / `.dev.vars` | Not set                             | Not set                  | **Required** (session signing secret)   |
-| `RESEND_API_KEY`        | `wrangler secret` / `.dev.vars` | Not set                             | Not set                  | **Required** (magic-link email sender)  |
-| `RESEND_FROM_EMAIL`     | `wrangler secret` / `.dev.vars` | Not set                             | Not set                  | **Required** (verified sender address)  |
-| `CF_ACCESS_TEAM_DOMAIN` | `wrangler secret` / `.dev.vars` | Not set                             | Recommended              | Not used                                |
-| `CF_ACCESS_AUD`         | `wrangler secret` / `.dev.vars` | Not set                             | Recommended              | Not used                                |
+| `OWNER_EMAIL`           | `wrangler secret` / `.dev.vars` | Optional (`owner@localhost`)        | **Required**             | Not used                                      |
+| `AUTH_SECRET`           | `wrangler secret` / `.dev.vars` | Not set                             | Not set                  | **Required** (session signing secret)         |
+| `RESEND_API_KEY`        | `wrangler secret` / `.dev.vars` | Not set                             | Not set                  | **Required** (magic-link email sender)        |
+| `RESEND_FROM_EMAIL`     | `wrangler secret` / `.dev.vars` | Not set                             | Not set                  | **Required** (verified sender address)        |
+| `CF_ACCESS_TEAM_DOMAIN` | `wrangler secret` / `.dev.vars` | Not set                             | Recommended              | Not used                                      |
+| `CF_ACCESS_AUD`         | `wrangler secret` / `.dev.vars` | Not set                             | Recommended              | Not used                                      |
 
 ### Authentication Behavior by Mode
 
-| Scenario                                        | What happens on each request                                                                                                                               |
-|-------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Scenario                                        | What happens on each request                                                                                                                                |
+|-------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | **`multi-user` mode, valid session cookie**     | Better Auth session (`fr_session` cookie) is validated. User looked up by session. This is the primary browser auth for multi-user.                         |
-| **`multi-user` mode, no session**               | Falls through to API key check. If no valid API key → **401 rejected**. CF Access cookies are ignored in multi-user mode.                                  |
-| **`single-user` mode, no CF Access configured** | All requests auto-authenticate as the sole user (created from `OWNER_EMAIL` or `owner@localhost`). No login page. This is the default local dev experience.|
-| **`single-user` mode, CF Access configured**    | CF Access JWT validated. User looked up or auto-created from JWT email. Missing/invalid JWT falls through to API key, then **401** (no auto-auth fallback).|
-| **API key** (any mode)                          | `Authorization: Bearer <key>` header is hashed and looked up. API keys are scoped to their creator's `user_id`. Works regardless of mode.                  |
+| **`multi-user` mode, no session**               | Falls through to API key check. If no valid API key → **401 rejected**. CF Access cookies are ignored in multi-user mode.                                   |
+| **`single-user` mode, no CF Access configured** | All requests auto-authenticate as the sole user (created from `OWNER_EMAIL` or `owner@localhost`). No login page. This is the default local dev experience. |
+| **`single-user` mode, CF Access configured**    | CF Access JWT validated. User looked up or auto-created from JWT email. Missing/invalid JWT falls through to API key, then **401** (no auto-auth fallback). |
+| **API key** (any mode)                          | `Authorization: Bearer <key>` header is hashed and looked up. API keys are scoped to their creator's `user_id`. Works regardless of mode.                   |
 
 ### Auth Resolution Order
 
@@ -197,21 +197,21 @@ EMAIL_DOMAIN=read.yourdomain.com COLLAPSE_PLUS_ALIAS=false OWNER_EMAIL=you@examp
 
 ### Which Workers Need Which Variables
 
-| Variable                        | `web`                  | `email-worker` | `rss-worker` | `db` (migrations only) |
-|---------------------------------|------------------------|----------------|--------------|------------------------|
-| `EMAIL_DOMAIN`                  | Yes                    | Yes            | —            | —                      |
-| `COLLAPSE_PLUS_ALIAS`           | —                      | Yes            | —            | —                      |
-| `AUTH_MODE`                     | Yes                    | Yes            | —            | —                      |
-| `BETTER_AUTH_URL`               | Yes (multi-user only)  | —              | —            | —                      |
-| `OWNER_EMAIL`                   | Yes (secret)           | Yes (secret)   | —            | —                      |
-| `AUTH_SECRET`                   | Yes (secret, multi-user only) | —       | —            | —                      |
-| `RESEND_API_KEY`                | Yes (secret, multi-user only) | —       | —            | —                      |
-| `RESEND_FROM_EMAIL`             | Yes (secret, multi-user only) | —       | —            | —                      |
-| `CF_ACCESS_TEAM_DOMAIN`         | Yes (secret, optional) | —              | —            | —                      |
-| `CF_ACCESS_AUD`                 | Yes (secret, optional) | —              | —            | —                      |
-| `FOCUS_DB` (D1 binding)         | Yes                    | Yes            | Yes          | Yes                    |
-| `FOCUS_STORAGE` (R2 binding)    | Yes                    | Yes            | —            | —                      |
-| `NEXT_INC_CACHE_R2_BUCKET` (R2) | Yes                    | —              | —            | —                      |
+| Variable                        | `web`                         | `email-worker` | `rss-worker` | `db` (migrations only) |
+|---------------------------------|-------------------------------|----------------|--------------|------------------------|
+| `EMAIL_DOMAIN`                  | Yes                           | Yes            | —            | —                      |
+| `COLLAPSE_PLUS_ALIAS`           | —                             | Yes            | —            | —                      |
+| `AUTH_MODE`                     | Yes                           | Yes            | —            | —                      |
+| `BETTER_AUTH_URL`               | Yes (multi-user only)         | —              | —            | —                      |
+| `OWNER_EMAIL`                   | Yes (secret)                  | Yes (secret)   | —            | —                      |
+| `AUTH_SECRET`                   | Yes (secret, multi-user only) | —              | —            | —                      |
+| `RESEND_API_KEY`                | Yes (secret, multi-user only) | —              | —            | —                      |
+| `RESEND_FROM_EMAIL`             | Yes (secret, multi-user only) | —              | —            | —                      |
+| `CF_ACCESS_TEAM_DOMAIN`         | Yes (secret, optional)        | —              | —            | —                      |
+| `CF_ACCESS_AUD`                 | Yes (secret, optional)        | —              | —            | —                      |
+| `FOCUS_DB` (D1 binding)         | Yes                           | Yes            | Yes          | Yes                    |
+| `FOCUS_STORAGE` (R2 binding)    | Yes                           | Yes            | —            | —                      |
+| `NEXT_INC_CACHE_R2_BUCKET` (R2) | Yes                           | —              | —            | —                      |
 
 ## 7. Set Up Authentication
 
@@ -345,12 +345,12 @@ Local dev uses `.wrangler/state/v3` for D1 and R2 persistence. The `initOpenNext
 
 Focus Reader uses D1 migrations in `packages/db/migrations/`:
 
-| Migration                               | Description                                                                 |
-|-----------------------------------------|-----------------------------------------------------------------------------|
-| `0001_initial_schema.sql`               | Core tables: document, subscription, feed, tag, highlight, collection, etc. |
-| `0002_fts5_search.sql`                  | FTS5 full-text search virtual table                                         |
-| `0003_highlight_collection_indexes.sql` | Performance indexes for highlights and collections                          |
-| `0004_multi_tenancy.sql`                | `user` table, `user_id` columns on all primary tables, composite indexes    |
+| Migration                               | Description                                                                   |
+|-----------------------------------------|-------------------------------------------------------------------------------|
+| `0001_initial_schema.sql`               | Core tables: document, subscription, feed, tag, highlight, collection, etc.   |
+| `0002_fts5_search.sql`                  | FTS5 full-text search virtual table                                           |
+| `0003_highlight_collection_indexes.sql` | Performance indexes for highlights and collections                            |
+| `0004_multi_tenancy.sql`                | `user` table, `user_id` columns on all primary tables, composite indexes      |
 | `0005_auth_hybrid.sql`                  | `email_verified` on user, `session` and `verification` tables for Better Auth |
 
 The multi-tenancy migration (`0004`) adds a `user` table and a `user_id` column to all primary entity tables. The auth hybrid migration (`0005`) adds `email_verified` to the `user` table and creates `session` and `verification` tables used by Better Auth for magic-link authentication in multi-user mode.
