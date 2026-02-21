@@ -11,6 +11,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { apiFetch, ApiClientError } from "@/lib/api-client";
+import { useApp } from "@/contexts/app-context";
 import { Loader2, Upload } from "lucide-react";
 import { toast } from "sonner";
 
@@ -27,6 +28,7 @@ export function AddBookmarkDialog({
   onOpenChange,
   initialMode = "url",
 }: AddBookmarkDialogProps) {
+  const { mutateDocumentList } = useApp();
   const [mode, setMode] = useState<Mode>(initialMode);
   const [url, setUrl] = useState("");
   const [saving, setSaving] = useState(false);
@@ -56,6 +58,7 @@ export function AddBookmarkDialog({
         method: "POST",
         body: JSON.stringify({ url: url.trim(), type: "bookmark" }),
       });
+      mutateDocumentList();
       toast("Document saved");
       reset();
       onOpenChange(false);
@@ -85,6 +88,7 @@ export function AddBookmarkDialog({
         const body = await res.json().catch(() => null) as { error?: { message?: string } } | null;
         throw new Error(body?.error?.message || "Upload failed");
       }
+      mutateDocumentList();
       toast("PDF uploaded");
       reset();
       onOpenChange(false);
