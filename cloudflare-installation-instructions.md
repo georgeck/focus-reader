@@ -74,15 +74,18 @@ Shared data services:
 1. `FOCUS_DB` (Cloudflare D1)
 2. `FOCUS_STORAGE` (Cloudflare R2 for content/attachments)
 3. `NEXT_INC_CACHE_R2_BUCKET` (Cloudflare R2 for Next/OpenNext cache)
+4. `focus-reader-extraction-queue` (Cloudflare Queue for async enrichment jobs)
+5. `focus-reader-extraction-dlq` (Cloudflare Queue — dead-letter queue for failed jobs)
 
 ## 2. Prerequisites
 
 1. Cloudflare account with Workers enabled.
 2. Cloudflare D1 enabled.
 3. Cloudflare R2 enabled.
-4. Cloudflare Email Routing enabled (if using newsletter ingestion).
-5. Cloudflare Access / Zero Trust enabled (optional, recommended for single-user production deployments).
-6. [Resend](https://resend.com) account with a verified sender domain (required for multi-user mode magic-link emails).
+4. Cloudflare Queues enabled.
+5. Cloudflare Email Routing enabled (if using newsletter ingestion).
+6. Cloudflare Access / Zero Trust enabled (optional, recommended for single-user production deployments).
+7. [Resend](https://resend.com) account with a verified sender domain (required for multi-user mode magic-link emails).
 7. Node.js 20+.
 8. `pnpm` 10+.
 9. `wrangler` CLI.
@@ -112,6 +115,12 @@ pnpm wrangler d1 create focus-reader-db
 ```bash
 pnpm wrangler r2 bucket create focus-reader-storage
 pnpm wrangler r2 bucket create focus-reader-cache
+```
+
+4. Queues (must exist before deploying the web app or RSS worker):
+```bash
+pnpm wrangler queues create focus-reader-extraction-queue
+pnpm wrangler queues create focus-reader-extraction-dlq
 ```
 
 Record these values — you will need them in the next step:
@@ -217,6 +226,7 @@ EMAIL_DOMAIN=read.yourdomain.com COLLAPSE_PLUS_ALIAS=false OWNER_EMAIL=you@examp
 | `FOCUS_DB` (D1 binding)         | Yes                           | Yes            | Yes          | Yes                    |
 | `FOCUS_STORAGE` (R2 binding)    | Yes                           | Yes            | —            | —                      |
 | `NEXT_INC_CACHE_R2_BUCKET` (R2) | Yes                           | —              | —            | —                      |
+| `EXTRACTION_QUEUE` (Queue)      | Yes (producer)                | —              | Yes (producer + consumer) | —       |
 
 ## 7. Set Up Authentication
 
@@ -430,6 +440,21 @@ Fix:
 
 1. Verify route `*@<EMAIL_DOMAIN>` targets email worker
 2. Verify `EMAIL_DOMAIN` in worker vars
+
+### Issue: Deploy fails with "Queue does not exist"
+
+Cause:
+
+1. `focus-reader-extraction-queue` or `focus-reader-extraction-dlq` have not been created in your Cloudflare account yet
+
+Fix:
+
+```bash
+pnpm wrangler queues create focus-reader-extraction-queue
+pnpm wrangler queues create focus-reader-extraction-dlq
+```
+
+Then re-run the deploy. Queues only need to be created once per account.
 
 ### Issue: RSS polling does not run
 
