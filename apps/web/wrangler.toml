@@ -33,3 +33,7 @@ bucket_name = "focus-reader-cache"
 [[queues.producers]]
 queue = "focus-reader-extraction-queue"
 binding = "EXTRACTION_QUEUE"
+
+[observability]
+logs.enabled = true
+logs.invocation_logs = true
