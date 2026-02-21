@@ -74,9 +74,35 @@ export function DocumentCard({
         <h3 className={cn("text-sm line-clamp-2 leading-snug", !isRead && "font-semibold")}>
           {doc.title}
         </h3>
-        <div className="flex items-center gap-1.5 mt-auto pt-2 text-xs text-muted-foreground">
-          {doc.site_name && <span className="truncate">{doc.site_name}</span>}
-          <span className="ml-auto shrink-0">{timeAgo(doc.saved_at)}</span>
+        <div className="mt-auto pt-2 space-y-1.5">
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            {doc.favicon_url && (
+              <img
+                src={doc.favicon_url}
+                alt=""
+                className="size-3.5 rounded-sm flex-shrink-0"
+                onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+              />
+            )}
+            {doc.site_name && <span className="truncate">{doc.site_name}</span>}
+            <span className="ml-auto shrink-0">{timeAgo(doc.saved_at)}</span>
+          </div>
+          {doc.tags.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1">
+              {doc.tags.slice(0, 3).map((tag) => (
+                <span
+                  key={tag.id}
+                  className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                  style={{ borderLeft: `2px solid ${tag.color || "#6366f1"}` }}
+                >
+                  {tag.name}
+                </span>
+              ))}
+              {doc.tags.length > 3 && (
+                <span className="text-[10px] text-muted-foreground">+{doc.tags.length - 3}</span>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

@@ -89,7 +89,7 @@ export function DocumentListItem({
             {doc.excerpt}
           </p>
         ) : null}
-        <div className="flex items-center gap-1.5 mt-1 text-xs text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-1.5 mt-1 text-xs text-muted-foreground">
           {doc.favicon_url && (
             <img
               src={doc.favicon_url}
@@ -110,6 +110,18 @@ export function DocumentListItem({
               <span>&middot;</span>
               <span>{doc.reading_time_minutes}min</span>
             </>
+          )}
+          {doc.tags.slice(0, 3).map((tag) => (
+            <span
+              key={tag.id}
+              className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground"
+              style={{ borderLeft: `2px solid ${tag.color || "#6366f1"}` }}
+            >
+              {tag.name}
+            </span>
+          ))}
+          {doc.tags.length > 3 && (
+            <span className="text-[10px]">+{doc.tags.length - 3}</span>
           )}
         </div>
       </div>
