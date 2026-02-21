@@ -1,6 +1,5 @@
 import {
-  emailToSubscriptionKey,
-  slugToDisplayName,
+  parseToAddressRoute,
   extractDomain,
   countWords,
   estimateReadingTime,
@@ -11,7 +10,7 @@ import type { AutoTagRule } from "@focus-reader/shared";
 import type { UserScopedDb } from "@focus-reader/db";
 import {
   scopeDb,
-  getOrCreateSingleUser,
+  getUserBySlug,
   createDocument,
   getDocument,
   createEmailMeta,
@@ -25,6 +24,8 @@ import {
   logIngestionEvent,
   isDomainDenied,
   createAttachment,
+  createTag,
+  getTagByName,
 } from "@focus-reader/db";
 import {
   parseEmail,
@@ -43,9 +44,7 @@ export interface Env {
   FOCUS_DB: D1Database;
   FOCUS_STORAGE: R2Bucket;
   EMAIL_DOMAIN: string;
-  COLLAPSE_PLUS_ALIAS: string;
-  OWNER_EMAIL?: string;
-  AUTH_MODE?: string;
+  AUTH_MODE: string;
 }
 
 async function withRetry<T>(
@@ -91,12 +90,18 @@ async function streamToArrayBuffer(
   return combined.buffer;
 }
 
-async function resolveUserId(db: D1Database, env: Env): Promise<string> {
-  // For now, resolve to the single/default user.
-  // Phase 4 will add subdomain-based routing for multi-user mode.
-  const email = env.OWNER_EMAIL || "owner@localhost";
-  const user = await getOrCreateSingleUser(db, email);
-  return user.id;
+async function resolveRouting(
+  toAddress: string,
+  db: D1Database,
+  env: Env
+): Promise<{ userId: string; aliasTag: string | null }> {
+  const authMode = env.AUTH_MODE ?? "single-user";
+  const { userSlug, aliasTag } = parseToAddressRoute(toAddress, env.EMAIL_DOMAIN, authMode);
+  const user = await getUserBySlug(db, userSlug);
+  if (!user) {
+    throw new Error(`No user found for slug "${userSlug}" (to: ${toAddress})`);
+  }
+  return { userId: user.id, aliasTag };
 }
 
 export default {
@@ -106,7 +111,6 @@ export default {
     _ctx: ExecutionContext
   ): Promise<void> {
     const eventId = crypto.randomUUID();
-    const collapsePlus = env.COLLAPSE_PLUS_ALIAS === "true";
     const db = env.FOCUS_DB;
 
     try {
@@ -117,12 +121,12 @@ export default {
       // use the same ID across attempts, preventing orphan objects and duplicates
       const documentId = crypto.randomUUID();
 
-      // Resolve user for this email
-      const userId = await resolveUserId(db, env);
+      // Resolve routing for this email
+      const { userId, aliasTag } = await resolveRouting(message.to, db, env);
       const ctx = scopeDb(db, userId);
 
       await withRetry(MAX_RETRY_ATTEMPTS, () =>
-        processEmail(rawBuffer, message.to, env, ctx, eventId, collapsePlus, documentId)
+        processEmail(rawBuffer, message.to, aliasTag, env, ctx, eventId, documentId)
       );
     } catch (err) {
       // Final failure after all retries
@@ -130,9 +134,8 @@ export default {
         err instanceof Error ? err.message : String(err);
 
       // Log with a temporary context for error logging
-      const userId = await resolveUserId(db, env).catch(() => "00000000-0000-0000-0000-000000000000");
-      const ctx = scopeDb(db, userId);
-      await logIngestionEvent(ctx, {
+      const logCtx = scopeDb(db, "00000000-0000-0000-0000-000000000000");
+      await logIngestionEvent(logCtx, {
         event_id: eventId,
         channel_type: "email",
         status: "failure",
@@ -149,22 +152,16 @@ export default {
 async function processEmail(
   rawBuffer: ArrayBuffer,
   recipientAddress: string,
+  aliasTag: string | null,
   env: Env,
   ctx: UserScopedDb,
   eventId: string,
-  collapsePlus: boolean,
   documentId: string
 ): Promise<void> {
   const db = ctx.db;
 
   // Step 1: Parse MIME
   const parsed = await parseEmail(rawBuffer);
-
-  // Step 2: Extract recipient and subscription key
-  const subscriptionKey = emailToSubscriptionKey(
-    recipientAddress,
-    collapsePlus
-  );
 
   // Step 3: Deduplicate (child entity queries use raw db)
   const messageId = extractMessageId(parsed.headers);
@@ -279,12 +276,13 @@ async function processEmail(
   const readingTime = estimateReadingTime(wordCount);
 
   // Step 12: Look up or auto-create subscription
-  const pseudoEmail = `${subscriptionKey}@${env.EMAIL_DOMAIN}`;
+  const pseudoEmail = recipientAddress.toLowerCase();
   let subscription = await getSubscriptionByEmail(ctx, pseudoEmail);
   if (!subscription) {
+    const senderDomain = parsed.from.address.split("@")[1] ?? parsed.from.address;
     subscription = await createSubscription(ctx, {
       pseudo_email: pseudoEmail,
-      display_name: slugToDisplayName(subscriptionKey),
+      display_name: parsed.from.name || senderDomain,
       sender_address: parsed.from.address,
       sender_name: parsed.from.name || null,
     });
@@ -358,6 +356,13 @@ async function processEmail(
   // Step 16: Inherit subscription tags
   const subTags = await getTagsForSubscription(ctx, subscription.id);
   for (const tag of subTags) {
+    await addTagToDocument(ctx, documentId, tag.id);
+  }
+
+  // Step 16b: Apply alias tag if present in To address
+  if (aliasTag) {
+    const existingTag = await getTagByName(ctx, aliasTag);
+    const tag = existingTag ?? await createTag(ctx, { name: aliasTag });
     await addTagToDocument(ctx, documentId, tag.id);
   }
 
