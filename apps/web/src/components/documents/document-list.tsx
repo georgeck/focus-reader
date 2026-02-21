@@ -92,6 +92,7 @@ export function DocumentList({
   const [isBulkMode, setIsBulkMode] = useState(false);
   const [selectedBulkIds, setSelectedBulkIds] = useState<Set<string>>(new Set());
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [isBulkUpdating, setIsBulkUpdating] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     if (typeof window !== "undefined") {
       return (localStorage.getItem("focus-view-mode") as ViewMode) || "list";
@@ -341,6 +342,33 @@ export function DocumentList({
     }
   }, [mutate, selectedBulkIds, setHoveredDocumentId]);
 
+  const moveSelected = useCallback(
+    async (targetLocation: DocumentLocation) => {
+      const ids = Array.from(selectedBulkIds);
+      if (ids.length === 0) return;
+
+      setIsBulkUpdating(true);
+      try {
+        const result = await apiFetch<{ updatedCount: number }>("/api/documents/bulk-update", {
+          method: "PATCH",
+          body: JSON.stringify({
+            ids,
+            location: targetLocation,
+          }),
+        });
+        toast(`${result.updatedCount} documents moved to ${targetLocation}`);
+        setSelectedBulkIds(new Set());
+        setHoveredDocumentId(null);
+        await mutate();
+      } catch {
+        toast.error(`Failed to move selected documents to ${targetLocation}`);
+      } finally {
+        setIsBulkUpdating(false);
+      }
+    },
+    [mutate, selectedBulkIds, setHoveredDocumentId]
+  );
+
   const displayTotal = isSearchActive ? searchTotal : total;
   const displayIsLoading = isSearchActive ? searchIsLoading : isLoading;
 
@@ -362,10 +390,13 @@ export function DocumentList({
     selectedCount: selectedBulkIds.size,
     allVisibleSelected,
     isBulkDeleting,
+    isBulkUpdating,
     onToggleBulkMode: toggleBulkMode,
     onToggleSelectAllVisible: toggleSelectAllVisible,
     onClearSelection: clearBulkSelection,
     onDeleteSelected: deleteSelected,
+    onMoveSelectedToLater: () => moveSelected("later"),
+    onMoveSelectedToArchive: () => moveSelected("archive"),
   };
 
   if (displayIsLoading && displayDocuments.length === 0) {

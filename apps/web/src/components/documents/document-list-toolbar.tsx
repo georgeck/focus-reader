@@ -73,10 +73,13 @@ interface DocumentListToolbarProps {
   selectedCount?: number;
   allVisibleSelected?: boolean;
   isBulkDeleting?: boolean;
+  isBulkUpdating?: boolean;
   onToggleBulkMode?: () => void;
   onToggleSelectAllVisible?: () => void;
   onClearSelection?: () => void;
   onDeleteSelected?: () => void;
+  onMoveSelectedToLater?: () => void;
+  onMoveSelectedToArchive?: () => void;
 }
 
 export function DocumentListToolbar({
@@ -97,10 +100,13 @@ export function DocumentListToolbar({
   selectedCount = 0,
   allVisibleSelected = false,
   isBulkDeleting = false,
+  isBulkUpdating = false,
   onToggleBulkMode,
   onToggleSelectAllVisible,
   onClearSelection,
   onDeleteSelected,
+  onMoveSelectedToLater,
+  onMoveSelectedToArchive,
 }: DocumentListToolbarProps) {
   const { sidebarCollapsed, toggleSidebar, rightPanelVisible, toggleRightPanel } = useApp();
   const typeLabel = TYPE_OPTIONS.find((o) => o.value === (selectedType ?? null))?.label ?? "All Types";
@@ -124,18 +130,36 @@ export function DocumentListToolbar({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
             {onToggleBulkMode && (
-              <DropdownMenuItem onClick={onToggleBulkMode}>
+              <DropdownMenuItem onClick={onToggleBulkMode} disabled={isBulkDeleting || isBulkUpdating}>
                 {isBulkMode ? "Exit selection mode" : "Select documents"}
               </DropdownMenuItem>
             )}
             {onDeleteSelected && isBulkMode && (
-              <DropdownMenuItem
-                onClick={onDeleteSelected}
-                disabled={selectedCount === 0 || isBulkDeleting}
-                className="text-destructive"
-              >
-                Delete selected ({selectedCount})
-              </DropdownMenuItem>
+              <>
+                {onMoveSelectedToLater && (
+                  <DropdownMenuItem
+                    onClick={onMoveSelectedToLater}
+                    disabled={selectedCount === 0 || isBulkDeleting || isBulkUpdating}
+                  >
+                    Move selected to Later ({selectedCount})
+                  </DropdownMenuItem>
+                )}
+                {onMoveSelectedToArchive && (
+                  <DropdownMenuItem
+                    onClick={onMoveSelectedToArchive}
+                    disabled={selectedCount === 0 || isBulkDeleting || isBulkUpdating}
+                  >
+                    Move selected to Archive ({selectedCount})
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem
+                  onClick={onDeleteSelected}
+                  disabled={selectedCount === 0 || isBulkDeleting || isBulkUpdating}
+                  className="text-destructive"
+                >
+                  Delete selected ({selectedCount})
+                </DropdownMenuItem>
+              </>
             )}
           </DropdownMenuContent>
         </DropdownMenu>
@@ -145,7 +169,7 @@ export function DocumentListToolbar({
             size="sm"
             className="h-7 px-2 text-xs text-muted-foreground"
             onClick={onToggleSelectAllVisible}
-            disabled={isBulkDeleting || total === 0}
+            disabled={isBulkDeleting || isBulkUpdating || total === 0}
           >
             {allVisibleSelected ? "Clear all" : "Select all"}
           </Button>
@@ -159,7 +183,7 @@ export function DocumentListToolbar({
                 size="sm"
                 className="h-7 px-2 text-xs text-muted-foreground"
                 onClick={onClearSelection}
-                disabled={isBulkDeleting || selectedCount === 0}
+                disabled={isBulkDeleting || isBulkUpdating || selectedCount === 0}
               >
                 Clear
               </Button>
@@ -170,7 +194,7 @@ export function DocumentListToolbar({
                 size="sm"
                 className="h-7 gap-1 px-2 text-xs"
                 onClick={onToggleBulkMode}
-                disabled={isBulkDeleting}
+                disabled={isBulkDeleting || isBulkUpdating}
               >
                 <Check className="size-3" />
                 Done

@@ -4,6 +4,7 @@ import type {
   DocumentWithTags,
   UpdateDocumentInput,
   Document,
+  DocumentLocation,
 } from "@focus-reader/shared";
 import { normalizeUrl } from "@focus-reader/shared";
 import type { UserScopedDb } from "@focus-reader/db";
@@ -18,6 +19,7 @@ import {
   countDocumentsByQuery,
   listDocumentIdsByQuery,
   softDeleteDocumentsByIds,
+  batchUpdateDocuments,
 } from "@focus-reader/db";
 import { extractArticle, extractMetadata, extractPdfMetadata } from "@focus-reader/parser";
 import { tagDocument } from "./tags.js";
@@ -80,6 +82,11 @@ export type BulkDeleteDocumentsInput =
   | BulkDeleteSelectedInput
   | BulkDeleteFilteredInput;
 
+export interface BulkMoveSelectedDocumentsInput {
+  ids: string[];
+  location: DocumentLocation;
+}
+
 export async function previewBulkDeleteDocuments(
   ctx: UserScopedDb,
   query: ListDocumentsQuery
@@ -100,6 +107,19 @@ export async function bulkDeleteDocuments(
 
   const ids = await listDocumentIdsByQuery(ctx, input.query);
   return softDeleteDocumentsByIds(ctx, ids);
+}
+
+export async function bulkMoveSelectedDocuments(
+  ctx: UserScopedDb,
+  input: BulkMoveSelectedDocumentsInput
+): Promise<number> {
+  if (input.ids.length === 0) return 0;
+  if (input.ids.length > 500) {
+    throw new Error("Too many IDs in selected scope");
+  }
+
+  await batchUpdateDocuments(ctx, input.ids, { location: input.location });
+  return input.ids.length;
 }
 
 export async function createBookmark(
