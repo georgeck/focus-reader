@@ -38,6 +38,9 @@ export function DocumentCard({
   const isStarred = doc.is_starred === 1;
   const TypeIcon = TYPE_ICONS[doc.type] || FileText;
   const actionsRef = useRef<DocumentListItemActionsHandle>(null);
+  const thumbnailSrc = doc.cover_image_url
+    ? `/api/covers/${doc.id}`
+    : doc.favicon_url || null;
 
   return (
     <div
@@ -54,18 +57,23 @@ export function DocumentCard({
       )}
     >
       {/* Image area */}
-      <div className="aspect-[16/9] bg-muted overflow-hidden">
-        {doc.cover_image_url ? (
+      <div className="relative aspect-[16/9] bg-muted overflow-hidden">
+        <div className="flex size-full items-center justify-center">
+          <TypeIcon className="size-8 text-muted-foreground/50" />
+        </div>
+        {thumbnailSrc && (
           <img
-            src={`/api/covers/${doc.id}`}
+            src={thumbnailSrc}
             alt=""
-            className="size-full object-cover"
+            className={cn(
+              "absolute inset-0",
+              doc.cover_image_url ? "size-full object-cover" : "m-auto size-12 rounded-lg object-contain"
+            )}
             loading="lazy"
+            onError={(e) => {
+              (e.target as HTMLImageElement).style.display = "none";
+            }}
           />
-        ) : (
-          <div className="flex size-full items-center justify-center">
-            <TypeIcon className="size-8 text-muted-foreground/50" />
-          </div>
         )}
       </div>
 

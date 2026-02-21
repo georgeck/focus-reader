@@ -40,6 +40,9 @@ export function DocumentListItem({
   const isStarred = doc.is_starred === 1;
   const TypeIcon = TYPE_ICONS[doc.type] || FileText;
   const actionsRef = useRef<DocumentListItemActionsHandle>(null);
+  const thumbnailSrc = doc.cover_image_url
+    ? `/api/covers/${doc.id}`
+    : doc.favicon_url || null;
 
   return (
     <div
@@ -61,16 +64,21 @@ export function DocumentListItem({
       </div>
 
       {/* Thumbnail */}
-      <div className="flex w-20 h-14 flex-shrink-0 items-center justify-center rounded-md bg-muted overflow-hidden">
-        {doc.cover_image_url ? (
+      <div className="relative flex w-20 h-14 flex-shrink-0 items-center justify-center rounded-md bg-muted overflow-hidden">
+        <TypeIcon className="size-5 text-muted-foreground" />
+        {thumbnailSrc && (
           <img
-            src={`/api/covers/${doc.id}`}
+            src={thumbnailSrc}
             alt=""
-            className="size-full object-cover"
+            className={cn(
+              "absolute inset-0",
+              doc.cover_image_url ? "size-full object-cover" : "m-auto size-8 rounded-md object-contain"
+            )}
             loading="lazy"
+            onError={(e) => {
+              (e.target as HTMLImageElement).style.display = "none";
+            }}
           />
-        ) : (
-          <TypeIcon className="size-5 text-muted-foreground" />
         )}
       </div>
 
