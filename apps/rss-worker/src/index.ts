@@ -1,10 +1,11 @@
-import { pollDueFeeds, processEnrichmentJob } from "@focus-reader/api";
+import { pollDueFeeds, processEnrichmentJob, cacheDocumentCoverImage } from "@focus-reader/api";
 import type { EnrichmentIntent } from "@focus-reader/api";
 import type { ExtractionEnrichmentJob } from "@focus-reader/shared";
 import { scopeDb } from "@focus-reader/db";
 
 export interface Env {
   FOCUS_DB: D1Database;
+  FOCUS_STORAGE: R2Bucket;
   EXTRACTION_QUEUE?: Queue<ExtractionEnrichmentJob>;
   BROWSER_RENDERING_ENABLED?: string;
   BROWSER_RENDERING_ACCOUNT_ID?: string;
@@ -59,20 +60,39 @@ export default {
     env: Env,
     _ctx: ExecutionContext
   ): Promise<void> {
-    if (env.BROWSER_RENDERING_ENABLED !== "true") {
-      for (const msg of batch.messages) msg.ack();
-      return;
-    }
-
-    const renderConfig = {
-      enabled: true,
-      accountId: env.BROWSER_RENDERING_ACCOUNT_ID!,
-      apiToken: env.BROWSER_RENDERING_API_TOKEN!,
-      timeoutMs: parseInt(env.BROWSER_RENDERING_TIMEOUT_MS || "12000", 10),
-    };
-
     for (const msg of batch.messages) {
       const job = msg.body as ExtractionEnrichmentJob;
+      const jobType = job.job_type || "enrichment";
+
+      if (jobType === "image_cache") {
+        try {
+          const ctx = scopeDb(env.FOCUS_DB, job.user_id);
+          const result = await cacheDocumentCoverImage(ctx, env.FOCUS_STORAGE, job.document_id);
+          console.log(JSON.stringify({
+            event: `IMAGE_CACHE_${result.status.toUpperCase()}`,
+            document_id: job.document_id,
+          }));
+          msg.ack();
+        } catch (err) {
+          console.warn(`Image cache job failed (retry): ${(err as Error).message}`);
+          msg.retry();
+        }
+        continue;
+      }
+
+      // Enrichment jobs require browser rendering
+      if (env.BROWSER_RENDERING_ENABLED !== "true") {
+        msg.ack();
+        continue;
+      }
+
+      const renderConfig = {
+        enabled: true,
+        accountId: env.BROWSER_RENDERING_ACCOUNT_ID!,
+        apiToken: env.BROWSER_RENDERING_API_TOKEN!,
+        timeoutMs: parseInt(env.BROWSER_RENDERING_TIMEOUT_MS || "12000", 10),
+      };
+
       try {
         const ctx = scopeDb(env.FOCUS_DB, job.user_id);
         const outcome = await processEnrichmentJob(ctx, job, renderConfig);
@@ -85,6 +105,16 @@ export default {
           render_latency_ms: outcome.renderLatencyMs,
           attempt: job.attempt,
         }));
+
+        // Cache cover image after successful enrichment
+        if (outcome.status === "applied") {
+          try {
+            await cacheDocumentCoverImage(ctx, env.FOCUS_STORAGE, job.document_id);
+          } catch {
+            // Non-fatal: image caching failure doesn't affect enrichment
+          }
+        }
+
         msg.ack();
       } catch (err) {
         console.warn(`Enrichment job failed (retry): ${(err as Error).message}`);

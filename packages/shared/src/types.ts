@@ -47,6 +47,7 @@ export interface Document {
   word_count: number;
   reading_time_minutes: number;
   cover_image_url: string | null;
+  cover_image_r2_key: string | null;
   html_content: string | null;
   markdown_content: string | null;
   plain_text_content: string | null;
@@ -578,4 +579,5 @@ export interface ExtractionEnrichmentJob {
   source: EnrichmentSource;
   attempt: number;
   enqueued_at: string;
+  job_type?: "enrichment" | "image_cache";
 }

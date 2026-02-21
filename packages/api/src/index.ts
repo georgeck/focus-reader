@@ -15,3 +15,4 @@ export * from "./feed-polling.js";
 export * from "./extraction-quality.js";
 export * from "./browser-rendering-client.js";
 export * from "./enrichment-consumer.js";
+export * from "./image-cache.js";

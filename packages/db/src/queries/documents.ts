@@ -128,6 +128,7 @@ export interface EnrichDocumentInput {
   author?: string | null;
   site_name?: string | null;
   cover_image_url?: string | null;
+  cover_image_r2_key?: string | null;
   word_count?: number;
   reading_time_minutes?: number;
   lang?: string | null;

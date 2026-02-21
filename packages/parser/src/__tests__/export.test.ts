@@ -19,6 +19,7 @@ const mockDoc: Document = {
   word_count: 500,
   reading_time_minutes: 3,
   cover_image_url: null,
+  cover_image_r2_key: null,
   html_content: null,
   markdown_content: null,
   plain_text_content: null,

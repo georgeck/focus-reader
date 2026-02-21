@@ -20,7 +20,7 @@ const EXPECTED_COLUMNS: Record<string, string[]> = {
   ],
   document: [
     "id", "user_id", "type", "url", "title", "author", "author_url", "site_name", "excerpt",
-    "word_count", "reading_time_minutes", "cover_image_url",
+    "word_count", "reading_time_minutes", "cover_image_url", "cover_image_r2_key",
     "html_content", "markdown_content", "plain_text_content",
     "location", "is_read", "is_starred", "reading_progress",
     "last_read_at", "saved_at", "published_at", "lang", "updated_at", "deleted_at",

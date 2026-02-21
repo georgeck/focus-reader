@@ -85,6 +85,25 @@ export async function POST(request: NextRequest) {
         : undefined;
 
       const doc = await createBookmark(ctx, url, { type, html, tagIds, onLowQuality });
+
+      // Enqueue image cache job if cover image exists
+      if (doc.cover_image_url && queue) {
+        try {
+          await queue.send({
+            job_id: crypto.randomUUID(),
+            user_id: userId,
+            document_id: doc.id,
+            url: doc.cover_image_url,
+            source: "manual_url",
+            attempt: 1,
+            enqueued_at: new Date().toISOString(),
+            job_type: "image_cache",
+          });
+        } catch {
+          // Non-fatal: image caching failure doesn't affect save
+        }
+      }
+
       return withCors(json(doc, 201), origin);
     } catch (err) {
       if (err instanceof DuplicateUrlError) {

@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS document (
   word_count INTEGER NOT NULL DEFAULT 0,
   reading_time_minutes INTEGER NOT NULL DEFAULT 0,
   cover_image_url TEXT,
+  cover_image_r2_key TEXT,
   html_content TEXT,
   markdown_content TEXT,
   plain_text_content TEXT,
@@ -427,3 +428,6 @@ CREATE INDEX IF NOT EXISTS idx_verification_expires_at ON verification(expires_a
 
 // Auto-generated from migrations/0006_add_lang.sql
 export const ADD_LANG_SQL = `ALTER TABLE document ADD COLUMN lang TEXT;`;
+
+// Auto-generated from migrations/0007_cover_image_cache.sql
+export const ADD_COVER_IMAGE_CACHE_SQL = `ALTER TABLE document ADD COLUMN cover_image_r2_key TEXT;`;
