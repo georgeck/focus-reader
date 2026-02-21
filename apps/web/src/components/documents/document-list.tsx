@@ -47,7 +47,15 @@ export function DocumentList({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const urlSelectedId = searchParams.get("doc");
-  const { selectedDocumentId, setSelectedDocumentId, setDocumentIds, setCurrentDocumentIndex, registerListMutate } = useApp();
+  const {
+    selectedDocumentId,
+    setSelectedDocumentId,
+    hoveredDocumentId,
+    setHoveredDocumentId,
+    setDocumentIds,
+    setCurrentDocumentIndex,
+    registerListMutate,
+  } = useApp();
   const selectedId = urlSelectedId || selectedDocumentId;
   const sentinelRef = useRef<HTMLDivElement>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -119,6 +127,46 @@ export function DocumentList({
   useEffect(() => {
     setDocumentIds(displayDocuments.map((d) => d.id));
   }, [displayDocuments, setDocumentIds]);
+
+  // Ensure list view always has a valid active selection when not in reading mode.
+  useEffect(() => {
+    if (displayDocuments.length === 0) {
+      setCurrentDocumentIndex(-1);
+      setHoveredDocumentId(null);
+      if (!urlSelectedId) {
+        setSelectedDocumentId(null);
+      }
+      return;
+    }
+
+    const activeId = urlSelectedId || selectedDocumentId;
+    const selectedIndex = activeId
+      ? displayDocuments.findIndex((d) => d.id === activeId)
+      : -1;
+
+    if (selectedIndex >= 0) {
+      setCurrentDocumentIndex(selectedIndex);
+      return;
+    }
+
+    if (!urlSelectedId) {
+      setSelectedDocumentId(displayDocuments[0].id);
+      setCurrentDocumentIndex(0);
+      if (hoveredDocumentId && hoveredDocumentId !== displayDocuments[0].id) {
+        setHoveredDocumentId(null);
+      }
+    } else {
+      setCurrentDocumentIndex(-1);
+    }
+  }, [
+    displayDocuments,
+    hoveredDocumentId,
+    selectedDocumentId,
+    setCurrentDocumentIndex,
+    setHoveredDocumentId,
+    setSelectedDocumentId,
+    urlSelectedId,
+  ]);
 
   const selectDocument = useCallback(
     (id: string) => {
@@ -199,6 +247,7 @@ export function DocumentList({
             selectedId={selectedId}
             onSelect={selectDocument}
             onOpen={openDocument}
+            onHover={setHoveredDocumentId}
             onMutate={() => mutate()}
           />
         ) : (
@@ -209,6 +258,8 @@ export function DocumentList({
               isSelected={doc.id === selectedId}
               onClick={() => selectDocument(doc.id)}
               onDoubleClick={() => openDocument(doc.id)}
+              onMouseEnter={() => setHoveredDocumentId(doc.id)}
+              onMouseLeave={() => setHoveredDocumentId(null)}
               onMutate={() => mutate()}
               snippet={isSearchActive ? (doc as any).snippet : undefined}
             />

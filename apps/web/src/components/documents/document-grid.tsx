@@ -8,6 +8,7 @@ interface DocumentGridProps {
   selectedId: string | null;
   onSelect: (id: string) => void;
   onOpen: (id: string) => void;
+  onHover: (id: string | null) => void;
   onMutate: () => void;
 }
 
@@ -16,6 +17,7 @@ export function DocumentGrid({
   selectedId,
   onSelect,
   onOpen,
+  onHover,
   onMutate,
 }: DocumentGridProps) {
   return (
@@ -27,6 +29,8 @@ export function DocumentGrid({
           isSelected={doc.id === selectedId}
           onClick={() => onSelect(doc.id)}
           onDoubleClick={() => onOpen(doc.id)}
+          onMouseEnter={() => onHover(doc.id)}
+          onMouseLeave={() => onHover(null)}
           onMutate={onMutate}
         />
       ))}

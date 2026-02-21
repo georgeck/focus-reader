@@ -24,6 +24,8 @@ interface DocumentCardProps {
   isSelected: boolean;
   onClick: () => void;
   onDoubleClick: () => void;
+  onMouseEnter: () => void;
+  onMouseLeave: () => void;
   onMutate: () => void;
 }
 
@@ -32,6 +34,8 @@ export function DocumentCard({
   isSelected,
   onClick,
   onDoubleClick,
+  onMouseEnter,
+  onMouseLeave,
   onMutate,
 }: DocumentCardProps) {
   const isRead = doc.is_read === 1;
@@ -47,6 +51,8 @@ export function DocumentCard({
       data-selected={isSelected}
       onClick={onClick}
       onDoubleClick={onDoubleClick}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
       onContextMenu={(e) => {
         e.preventDefault();
         actionsRef.current?.openMenu();

@@ -5,6 +5,8 @@ import { createContext, useContext, useState, useCallback, useRef, type ReactNod
 interface AppState {
   selectedDocumentId: string | null;
   setSelectedDocumentId: (id: string | null) => void;
+  hoveredDocumentId: string | null;
+  setHoveredDocumentId: (id: string | null) => void;
   documentIds: string[];
   setDocumentIds: (ids: string[]) => void;
   currentDocumentIndex: number;
@@ -27,6 +29,7 @@ const AppContext = createContext<AppState | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
+  const [hoveredDocumentId, setHoveredDocumentId] = useState<string | null>(null);
   const [documentIds, setDocumentIds] = useState<string[]>([]);
   const [currentDocumentIndex, setCurrentDocumentIndex] = useState(-1);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -56,6 +59,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       value={{
         selectedDocumentId,
         setSelectedDocumentId,
+        hoveredDocumentId,
+        setHoveredDocumentId,
         documentIds,
         setDocumentIds,
         currentDocumentIndex,

@@ -24,6 +24,8 @@ interface DocumentListItemProps {
   isSelected: boolean;
   onClick: () => void;
   onDoubleClick: () => void;
+  onMouseEnter: () => void;
+  onMouseLeave: () => void;
   onMutate: () => void;
   snippet?: string;
 }
@@ -33,6 +35,8 @@ export function DocumentListItem({
   isSelected,
   onClick,
   onDoubleClick,
+  onMouseEnter,
+  onMouseLeave,
   onMutate,
   snippet,
 }: DocumentListItemProps) {
@@ -49,6 +53,8 @@ export function DocumentListItem({
       data-selected={isSelected}
       onClick={onClick}
       onDoubleClick={onDoubleClick}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
       onContextMenu={(e) => {
         e.preventDefault();
         actionsRef.current?.openMenu();
