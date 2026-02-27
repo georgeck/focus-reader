@@ -14,6 +14,7 @@ import { Check, ChevronDown, Filter, PanelLeftOpen, PanelRightOpen, LayoutList, 
 import { SearchBar } from "@/components/search/search-bar";
 import { useApp } from "@/contexts/app-context";
 import type { DocumentType, ListDocumentsQuery } from "@focus-reader/shared";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const TYPE_OPTIONS: { label: string; value: DocumentType | null }[] = [
   { label: "All Types", value: null },
@@ -117,13 +118,14 @@ export function DocumentListToolbar({
   onMoveSelectedToArchive,
 }: DocumentListToolbarProps) {
   const { sidebarCollapsed, toggleSidebar, rightPanelVisible, toggleRightPanel } = useApp();
+  const isMobile = useIsMobile();
   const typeLabel = TYPE_OPTIONS.find((o) => o.value === (selectedType ?? null))?.label ?? "All Types";
   const canChangeSort = !sortLocked && !!onSortByChange && !!onSortDirChange;
   const sortDirectionLabels = SORT_DIRECTION_LABELS[sortBy];
 
   return (
-    <div className="flex items-center justify-between gap-2 border-b px-4 py-2">
-      <div className="flex items-center gap-1 shrink-0">
+    <div className="flex flex-wrap items-center justify-between gap-2 border-b px-3 sm:px-4 py-2">
+      <div className="flex flex-wrap items-center gap-1 min-w-0">
         {sidebarCollapsed && (
           <Button variant="ghost" size="icon" className="size-7" onClick={toggleSidebar}>
             <PanelLeftOpen className="size-4" />
@@ -222,7 +224,7 @@ export function DocumentListToolbar({
           </>
         )}
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
         {onSearch && <SearchBar onSearch={onSearch} />}
         {!isSearchActive && onTypeFilter && (
           <DropdownMenu>
@@ -309,7 +311,7 @@ export function DocumentListToolbar({
             </Button>
           </div>
         )}
-        {!rightPanelVisible && (
+        {!isMobile && !rightPanelVisible && (
           <Button variant="ghost" size="icon" className="size-7" onClick={toggleRightPanel}>
             <PanelRightOpen className="size-4" />
           </Button>
