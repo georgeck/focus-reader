@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -10,9 +11,27 @@ import {
   DropdownMenuLabel,
   DropdownMenuCheckboxItem,
 } from "@/components/ui/dropdown-menu";
-import { Check, ChevronDown, Filter, PanelLeftOpen, PanelRightOpen, LayoutList, LayoutGrid } from "lucide-react";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetClose,
+} from "@/components/ui/sheet";
+import {
+  ChevronDown,
+  PanelLeftOpen,
+  PanelRightOpen,
+  LayoutList,
+  LayoutGrid,
+  SlidersHorizontal,
+  Square,
+  Search,
+  X,
+} from "lucide-react";
 import { SearchBar } from "@/components/search/search-bar";
 import { useApp } from "@/contexts/app-context";
+import { cn } from "@/lib/utils";
 import type { DocumentType, ListDocumentsQuery } from "@focus-reader/shared";
 import { useIsMobile } from "@/hooks/use-mobile";
 
@@ -36,23 +55,14 @@ const SORT_FIELDS: { value: SortField; label: string }[] = [
 ];
 
 const SORT_DIRECTION_LABELS: Record<SortField, Record<SortDirection, string>> = {
-  saved_at: {
-    desc: "Recent → Old",
-    asc: "Old → Recent",
-  },
-  published_at: {
-    desc: "Recent → Old",
-    asc: "Old → Recent",
-  },
-  title: {
-    desc: "Z → A",
-    asc: "A → Z",
-  },
-  reading_time_minutes: {
-    desc: "Long → Short",
-    asc: "Short → Long",
-  },
+  saved_at: { desc: "Recent → Old", asc: "Old → Recent" },
+  published_at: { desc: "Recent → Old", asc: "Old → Recent" },
+  title: { desc: "Z → A", asc: "A → Z" },
+  reading_time_minutes: { desc: "Long → Short", asc: "Short → Long" },
 };
+
+const DEFAULT_SORT_BY: SortField = "saved_at";
+const DEFAULT_SORT_DIR: SortDirection = "desc";
 
 export type ViewMode = "list" | "grid";
 
@@ -112,211 +122,340 @@ export function DocumentListToolbar({
   onToggleBulkMode,
   onToggleSelectAllVisible,
   onToggleSelectAllMatching,
-  onClearSelection,
+  onClearSelection: _onClearSelection,
   onDeleteSelected,
   onMoveSelectedToLater,
   onMoveSelectedToArchive,
 }: DocumentListToolbarProps) {
   const { sidebarCollapsed, toggleSidebar, rightPanelVisible, toggleRightPanel } = useApp();
   const isMobile = useIsMobile();
-  const typeLabel = TYPE_OPTIONS.find((o) => o.value === (selectedType ?? null))?.label ?? "All Types";
+  const [searchExpanded, setSearchExpanded] = useState(false);
+  const [filterSheetOpen, setFilterSheetOpen] = useState(false);
+
   const canChangeSort = !sortLocked && !!onSortByChange && !!onSortDirChange;
   const sortDirectionLabels = SORT_DIRECTION_LABELS[sortBy];
 
+  const hasActiveFilter =
+    (selectedType ?? null) !== null ||
+    (!sortLocked && (sortBy !== DEFAULT_SORT_BY || sortDir !== DEFAULT_SORT_DIR));
+
+  const showFilterButton = !isSearchActive && (!!onTypeFilter || canChangeSort);
+
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 border-b px-3 sm:px-4 py-2">
-      <div className="flex flex-wrap items-center gap-1 min-w-0">
-        {sidebarCollapsed && (
-          <Button variant="ghost" size="icon" className="size-7" onClick={toggleSidebar}>
-            <PanelLeftOpen className="size-4" />
-          </Button>
-        )}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm" className="h-7 gap-1 px-2 text-sm font-semibold">
-              {title}
-              <ChevronDown className="size-3" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
-            {onToggleBulkMode && (
-              <DropdownMenuItem onClick={onToggleBulkMode} disabled={isBulkDeleting || isBulkUpdating}>
-                {isBulkMode ? "Exit selection mode" : "Select documents"}
-              </DropdownMenuItem>
-            )}
-            {onDeleteSelected && isBulkMode && (
-              <>
-                {onMoveSelectedToLater && (
-                  <DropdownMenuItem
-                    onClick={onMoveSelectedToLater}
-                    disabled={selectedCount === 0 || isBulkDeleting || isBulkUpdating}
-                  >
-                    Move selected to Later ({selectedCount})
-                  </DropdownMenuItem>
-                )}
-                {onMoveSelectedToArchive && (
-                  <DropdownMenuItem
-                    onClick={onMoveSelectedToArchive}
-                    disabled={selectedCount === 0 || isBulkDeleting || isBulkUpdating}
-                  >
-                    Move selected to Archive ({selectedCount})
-                  </DropdownMenuItem>
-                )}
-                <DropdownMenuItem
-                  onClick={onDeleteSelected}
-                  disabled={selectedCount === 0 || isBulkDeleting || isBulkUpdating}
-                  className="text-destructive"
-                >
-                  Delete selected ({selectedCount})
-                </DropdownMenuItem>
-              </>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
-        {isBulkMode && onToggleSelectAllVisible && (
+    <div className="flex items-center justify-between gap-2 border-b px-3 sm:px-4 py-2">
+
+      {/* ── Left cluster ── */}
+      {isBulkMode ? (
+        <div className="flex items-center gap-1 min-w-0 overflow-hidden">
           <Button
             variant="ghost"
             size="sm"
-            className="h-7 px-2 text-xs text-muted-foreground"
-            onClick={onToggleSelectAllVisible}
-            disabled={isBulkDeleting || isBulkUpdating || total === 0}
-          >
-            {allVisibleSelected ? "Clear all" : "Select all"}
-          </Button>
-        )}
-        {isBulkMode && onToggleSelectAllMatching && matchingCount > 0 && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 px-2 text-xs text-muted-foreground"
-            onClick={onToggleSelectAllMatching}
+            className="h-7 gap-1 px-2 text-xs shrink-0"
+            onClick={onToggleBulkMode}
             disabled={isBulkDeleting || isBulkUpdating}
           >
-            {allMatchingSelected ? "Use visible only" : `Select all matching (${matchingCount})`}
+            <X className="size-3" />
+            Done
           </Button>
-        )}
-        {isBulkMode && (
-          <>
-            <span className="text-xs text-muted-foreground">{selectedCount} {selectedLabel}</span>
-            {onClearSelection && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 px-2 text-xs text-muted-foreground"
-                onClick={onClearSelection}
-                disabled={isBulkDeleting || isBulkUpdating || selectedCount === 0}
-              >
-                Clear
-              </Button>
-            )}
-            {onToggleBulkMode && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 gap-1 px-2 text-xs"
-                onClick={onToggleBulkMode}
-                disabled={isBulkDeleting || isBulkUpdating}
-              >
-                <Check className="size-3" />
-                Done
-              </Button>
-            )}
-          </>
-        )}
-      </div>
-      <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-        {onSearch && <SearchBar onSearch={onSearch} />}
-        {!isSearchActive && onTypeFilter && (
+          <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0">
+            {selectedCount} {selectedLabel}
+          </span>
+          {onToggleSelectAllVisible && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs text-muted-foreground shrink-0"
+              onClick={onToggleSelectAllVisible}
+              disabled={isBulkDeleting || isBulkUpdating || total === 0}
+            >
+              {allVisibleSelected ? "Clear all" : "Select all"}
+            </Button>
+          )}
+          {onToggleSelectAllMatching && matchingCount > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs text-muted-foreground hidden sm:inline-flex"
+              onClick={onToggleSelectAllMatching}
+              disabled={isBulkDeleting || isBulkUpdating}
+            >
+              {allMatchingSelected ? "Visible only" : `All matching (${matchingCount})`}
+            </Button>
+          )}
+        </div>
+      ) : (
+        <div className="flex items-center gap-1 min-w-0">
+          {sidebarCollapsed && (
+            <Button variant="ghost" size="icon" className="size-7" onClick={toggleSidebar}>
+              <PanelLeftOpen className="size-4" />
+            </Button>
+          )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="gap-1 text-xs text-muted-foreground">
-                <Filter className="size-3" />
-                {typeLabel}
+              <Button variant="ghost" size="sm" className="h-7 gap-1 px-2 text-sm font-semibold">
+                {title}
                 <ChevronDown className="size-3" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              {TYPE_OPTIONS.map((opt) => (
-                <DropdownMenuItem
-                  key={opt.label}
-                  onClick={() => onTypeFilter(opt.value)}
-                >
-                  {opt.label}
+            <DropdownMenuContent align="start">
+              {onToggleBulkMode && (
+                <DropdownMenuItem onClick={onToggleBulkMode}>
+                  Select documents
                 </DropdownMenuItem>
-              ))}
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
-        )}
-        {!isSearchActive && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="gap-1 text-xs text-muted-foreground"
-                disabled={!canChangeSort}
-              >
-                {SORT_FIELDS.find((f) => f.value === sortBy)?.label || "Sort"}
-                <ChevronDown className="size-3" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel className="text-xs text-muted-foreground font-medium">Sort by</DropdownMenuLabel>
-              {SORT_FIELDS.map((field) => (
-                <DropdownMenuCheckboxItem
-                  key={field.value}
-                  checked={sortBy === field.value}
-                  disabled={!canChangeSort}
-                  onCheckedChange={() => onSortByChange?.(field.value)}
+          {onToggleBulkMode && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-7"
+              onClick={onToggleBulkMode}
+              title="Select documents"
+            >
+              <Square className="size-4" />
+            </Button>
+          )}
+        </div>
+      )}
+
+      {/* ── Right cluster ── */}
+      {isBulkMode ? (
+        // Desktop inline bulk actions (mobile uses BulkActionBar at bottom)
+        <div className="hidden sm:flex items-center gap-1.5">
+          {onMoveSelectedToArchive && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs text-muted-foreground"
+              onClick={onMoveSelectedToArchive}
+              disabled={selectedCount === 0 || isBulkDeleting || isBulkUpdating}
+            >
+              Archive ({selectedCount})
+            </Button>
+          )}
+          {onMoveSelectedToLater && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs text-muted-foreground"
+              onClick={onMoveSelectedToLater}
+              disabled={selectedCount === 0 || isBulkDeleting || isBulkUpdating}
+            >
+              Later ({selectedCount})
+            </Button>
+          )}
+          {onDeleteSelected && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs text-destructive hover:text-destructive"
+              onClick={onDeleteSelected}
+              disabled={selectedCount === 0 || isBulkDeleting || isBulkUpdating}
+            >
+              Delete ({selectedCount})
+            </Button>
+          )}
+        </div>
+      ) : isMobile && searchExpanded ? (
+        // Mobile search expanded: full-width input takes over the right side
+        <div className="flex flex-1 items-center min-w-0">
+          <SearchBar
+            onSearch={onSearch!}
+            compact
+            expanded
+            onExpandedChange={setSearchExpanded}
+          />
+        </div>
+      ) : (
+        // Normal controls
+        <div className="flex items-center gap-1 sm:gap-2">
+          {/* Mobile: search icon button */}
+          {onSearch && isMobile && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-7"
+              onClick={() => setSearchExpanded(true)}
+            >
+              <Search className="size-4" />
+            </Button>
+          )}
+
+          {/* Desktop: always-visible search input */}
+          {onSearch && !isMobile && (
+            <SearchBar onSearch={onSearch} />
+          )}
+
+          {/* Filter button — mobile: bottom sheet, desktop: dropdown */}
+          {showFilterButton && (
+            isMobile ? (
+              <>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={cn("size-7 relative", hasActiveFilter && "text-primary")}
+                  onClick={() => setFilterSheetOpen(true)}
                 >
-                  {field.label}
-                </DropdownMenuCheckboxItem>
-              ))}
-              <DropdownMenuSeparator />
-              <DropdownMenuLabel className="text-xs text-muted-foreground font-medium">Order by</DropdownMenuLabel>
-              <DropdownMenuCheckboxItem
-                checked={sortDir === "desc"}
-                disabled={!canChangeSort}
-                onCheckedChange={() => onSortDirChange?.("desc")}
+                  <SlidersHorizontal className="size-4" />
+                  {hasActiveFilter && (
+                    <span className="absolute top-0.5 right-0.5 size-1.5 rounded-full bg-primary" />
+                  )}
+                </Button>
+                <Sheet open={filterSheetOpen} onOpenChange={setFilterSheetOpen}>
+                  <SheetContent side="bottom" className="px-0">
+                    <SheetHeader className="px-4 pb-2">
+                      <SheetTitle className="text-base">Filter & Sort</SheetTitle>
+                    </SheetHeader>
+                    <div className="px-2 pb-2">
+                      {onTypeFilter && (
+                        <>
+                          <p className="text-xs font-medium text-muted-foreground px-2 py-1.5">Type</p>
+                          {TYPE_OPTIONS.map((opt) => (
+                            <button
+                              key={opt.label}
+                              className={cn(
+                                "w-full text-left px-2 py-2 text-sm rounded-md hover:bg-accent",
+                                (selectedType ?? null) === opt.value && "font-medium text-primary"
+                              )}
+                              onClick={() => {
+                                onTypeFilter(opt.value);
+                                setFilterSheetOpen(false);
+                              }}
+                            >
+                              {opt.label}
+                            </button>
+                          ))}
+                          <div className="my-2 border-t" />
+                        </>
+                      )}
+                      <p className="text-xs font-medium text-muted-foreground px-2 py-1.5">Sort by</p>
+                      {SORT_FIELDS.map((field) => (
+                        <button
+                          key={field.value}
+                          className={cn(
+                            "w-full text-left px-2 py-2 text-sm rounded-md hover:bg-accent",
+                            !canChangeSort && "opacity-50 pointer-events-none",
+                            sortBy === field.value && "font-medium text-primary"
+                          )}
+                          onClick={() => onSortByChange?.(field.value)}
+                        >
+                          {field.label}
+                        </button>
+                      ))}
+                      <div className="my-2 border-t" />
+                      <p className="text-xs font-medium text-muted-foreground px-2 py-1.5">Order</p>
+                      {(["desc", "asc"] as SortDirection[]).map((dir) => (
+                        <button
+                          key={dir}
+                          className={cn(
+                            "w-full text-left px-2 py-2 text-sm rounded-md hover:bg-accent",
+                            !canChangeSort && "opacity-50 pointer-events-none",
+                            sortDir === dir && "font-medium text-primary"
+                          )}
+                          onClick={() => onSortDirChange?.(dir)}
+                        >
+                          {sortDirectionLabels[dir]}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="px-4 pt-2 pb-4">
+                      <SheetClose asChild>
+                        <Button className="w-full" variant="outline">Done</Button>
+                      </SheetClose>
+                    </div>
+                  </SheetContent>
+                </Sheet>
+              </>
+            ) : (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className={cn("size-7 relative", hasActiveFilter && "text-primary")}
+                  >
+                    <SlidersHorizontal className="size-4" />
+                    {hasActiveFilter && (
+                      <span className="absolute top-0.5 right-0.5 size-1.5 rounded-full bg-primary" />
+                    )}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  {onTypeFilter && (
+                    <>
+                      <DropdownMenuLabel className="text-xs text-muted-foreground font-medium">Type</DropdownMenuLabel>
+                      {TYPE_OPTIONS.map((opt) => (
+                        <DropdownMenuCheckboxItem
+                          key={opt.label}
+                          checked={(selectedType ?? null) === opt.value}
+                          onCheckedChange={() => onTypeFilter(opt.value)}
+                        >
+                          {opt.label}
+                        </DropdownMenuCheckboxItem>
+                      ))}
+                      <DropdownMenuSeparator />
+                    </>
+                  )}
+                  <DropdownMenuLabel className="text-xs text-muted-foreground font-medium">Sort by</DropdownMenuLabel>
+                  {SORT_FIELDS.map((field) => (
+                    <DropdownMenuCheckboxItem
+                      key={field.value}
+                      checked={sortBy === field.value}
+                      disabled={!canChangeSort}
+                      onCheckedChange={() => onSortByChange?.(field.value)}
+                    >
+                      {field.label}
+                    </DropdownMenuCheckboxItem>
+                  ))}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel className="text-xs text-muted-foreground font-medium">Order</DropdownMenuLabel>
+                  <DropdownMenuCheckboxItem
+                    checked={sortDir === "desc"}
+                    disabled={!canChangeSort}
+                    onCheckedChange={() => onSortDirChange?.("desc")}
+                  >
+                    {sortDirectionLabels.desc}
+                  </DropdownMenuCheckboxItem>
+                  <DropdownMenuCheckboxItem
+                    checked={sortDir === "asc"}
+                    disabled={!canChangeSort}
+                    onCheckedChange={() => onSortDirChange?.("asc")}
+                  >
+                    {sortDirectionLabels.asc}
+                  </DropdownMenuCheckboxItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )
+          )}
+
+          {onViewModeChange && (
+            <div className="flex border rounded-md">
+              <Button
+                variant={viewMode === "list" ? "secondary" : "ghost"}
+                size="icon"
+                className="size-7 rounded-r-none"
+                onClick={() => onViewModeChange("list")}
               >
-                {sortDirectionLabels.desc}
-              </DropdownMenuCheckboxItem>
-              <DropdownMenuCheckboxItem
-                checked={sortDir === "asc"}
-                disabled={!canChangeSort}
-                onCheckedChange={() => onSortDirChange?.("asc")}
+                <LayoutList className="size-3.5" />
+              </Button>
+              <Button
+                variant={viewMode === "grid" ? "secondary" : "ghost"}
+                size="icon"
+                className="size-7 rounded-l-none"
+                onClick={() => onViewModeChange("grid")}
               >
-                {sortDirectionLabels.asc}
-              </DropdownMenuCheckboxItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
-        {onViewModeChange && (
-          <div className="flex border rounded-md">
-            <Button
-              variant={viewMode === "list" ? "secondary" : "ghost"}
-              size="icon"
-              className="size-7 rounded-r-none"
-              onClick={() => onViewModeChange("list")}
-            >
-              <LayoutList className="size-3.5" />
+                <LayoutGrid className="size-3.5" />
+              </Button>
+            </div>
+          )}
+          {!isMobile && !rightPanelVisible && (
+            <Button variant="ghost" size="icon" className="size-7" onClick={toggleRightPanel}>
+              <PanelRightOpen className="size-4" />
             </Button>
-            <Button
-              variant={viewMode === "grid" ? "secondary" : "ghost"}
-              size="icon"
-              className="size-7 rounded-l-none"
-              onClick={() => onViewModeChange("grid")}
-            >
-              <LayoutGrid className="size-3.5" />
-            </Button>
-          </div>
-        )}
-        {!isMobile && !rightPanelVisible && (
-          <Button variant="ghost" size="icon" className="size-7" onClick={toggleRightPanel}>
-            <PanelRightOpen className="size-4" />
-          </Button>
-        )}
-      </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
