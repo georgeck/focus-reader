@@ -39,19 +39,19 @@ This spec consolidates search/filter/sort controls and redesigns selection mode 
   - Mobile: top contextual state + sticky bottom actions menu.
 
 ### Selection Scope Wording
-- Use consistent “Select …” verbs.
-- Use explicit scope status text:
-  - `Scope: Visible`
-  - `Scope: All matching (N)`
-- Scope toggle wording:
-  - `Select all matching (N)` when in visible scope
-  - `Select visible only` when in all-matching scope
+- Use compact mutually exclusive scope toggles in selection mode:
+  - `Visible` (or `Visible (N)` when helpful)
+  - `All matching (N)`
+- Active toggle indicates current selection scope.
+- Avoid separate scope-label text to reduce clutter.
+- Use `None` for deselect-all action (while staying in selection mode), and `Cancel` to exit selection mode.
 
 ### Why This Path
-- Reduces cognitive load by avoiding duplicate/conflicting labels (for example two “Use visible only” buttons).
+- Reduces cognitive load by replacing verbose scope text with explicit segmented-like toggles.
 - Keeps batch operations scalable without consuming horizontal space as actions grow.
 - Matches user mental model from Gmail-style selection UX while preserving Focus Reader-specific actions.
 - Avoids false “already selected” signal by using an empty checkbox icon for entering selection mode.
+- Separates semantics clearly: `None` (clear selection) vs `Cancel` (exit mode).
 
 ## “Filter Badge” Clarification
 The filter button may show an optional numeric badge for active non-default options:
@@ -88,19 +88,18 @@ This badge is optional in v1; recommended for discoverability.
 ### Selection Mode (Desktop)
 - Replace normal toolbar controls with contextual selection bar:
   - Selected count (`N selected`)
-  - Scope label (`Scope: Visible` or `Scope: All matching (N)`)
-  - Optional `Select all visible` helper
-  - Scope toggle (`Select all matching (N)` / `Select visible only`)
-  - `Actions` menu containing `Move to Later`, `Move to Archive`, `Delete`
+  - Scope toggles: `Visible` / `All matching (N)` (mutually exclusive)
+  - `None` (clear selected IDs but stay in selection mode)
+  - Split-style `Actions` control with menu containing `Move to Later`, `Move to Archive`, `Delete`
   - `Cancel` (exit selection mode)
 
 ### Selection Mode (Mobile)
 - Top bar simplified:
   - `N selected`
   - `Cancel`
-  - Scope label + compact scope controls
+  - Compact scope toggles + `None`
 - Sticky bottom action bar:
-  - Single `Actions` menu (Later, Archive, Delete)
+  - Single split-style `Actions` menu (Later, Archive, Delete)
 
 ## Interaction Rules
 - Enter selection mode by tapping visible `Select` button.

@@ -16,7 +16,6 @@ import {
   Filter,
   LayoutGrid,
   LayoutList,
-  MoreHorizontal,
   PanelLeftOpen,
   PanelRightOpen,
   Search,
@@ -453,14 +452,16 @@ export function DocumentListToolbar({
                     <Button
                       variant="secondary"
                       size="sm"
-                      className="flex-1 h-9"
+                      className="flex-1 h-9 justify-between"
                       disabled={selectedCount === 0 || bulkBusy}
                     >
-                      Actions
-                      <ChevronDown className="size-3.5 ml-1" />
+                      <span>Actions</span>
+                      <span className="ml-2 inline-flex size-5 items-center justify-center rounded border bg-background/70">
+                        <ChevronDown className="size-3.5" />
+                      </span>
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="center" className="w-[240px]">
+                  <DropdownMenuContent align="end" sideOffset={6} className="w-[240px]">
                     {bulkActionsMenu}
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -484,7 +485,7 @@ export function DocumentListToolbar({
             <Button
               variant={!allMatchingSelected ? "secondary" : "ghost"}
               size="sm"
-              className="h-7 px-2 text-xs text-muted-foreground"
+              className="h-7 px-2 text-xs"
               onClick={activateVisibleScope}
               disabled={bulkBusy || total === 0}
             >
@@ -495,7 +496,7 @@ export function DocumentListToolbar({
             <Button
               variant={allMatchingSelected ? "secondary" : "ghost"}
               size="sm"
-              className="h-7 px-2 text-xs text-muted-foreground"
+              className="h-7 px-2 text-xs"
               onClick={activateMatchingScope}
               disabled={bulkBusy}
             >
@@ -521,14 +522,16 @@ export function DocumentListToolbar({
                 <Button
                   variant="secondary"
                   size="sm"
-                  className="h-8"
+                  className="h-8 justify-between min-w-[124px]"
                   disabled={selectedCount === 0 || bulkBusy}
                 >
-                  Actions
-                  <MoreHorizontal className="size-3.5 ml-1" />
+                  <span>Actions</span>
+                  <span className="ml-2 inline-flex size-4.5 items-center justify-center rounded border bg-background/70">
+                    <ChevronDown className="size-3.5" />
+                  </span>
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-[250px]">
+              <DropdownMenuContent align="end" sideOffset={6} className="w-[250px]">
                 {bulkActionsMenu}
               </DropdownMenuContent>
             </DropdownMenu>
