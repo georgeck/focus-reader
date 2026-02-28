@@ -31,6 +31,7 @@ import {
   BookX,
   Tag,
   FolderPlus,
+  FileText,
 } from "lucide-react";
 import { toast } from "sonner";
 import { TagManagerDialog } from "@/components/dialogs/tag-manager-dialog";
@@ -122,90 +123,44 @@ export const DocumentListItemActions = forwardRef<
     if (doc.url) window.open(doc.url, "_blank");
   }, [doc.url]);
 
+  const copyAsMarkdown = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/documents/${doc.id}/export`);
+      if (!res.ok) throw new Error();
+      const md = await res.text();
+      await navigator.clipboard.writeText(md);
+      toast("Copied as Markdown");
+    } catch {
+      toast.error("Failed to copy");
+    }
+  }, [doc.id]);
+
   return (
     <>
-      {/* Floating toolbar - visible on group hover */}
+      {/* Floating toolbar - visible on group hover or when dropdown is open */}
       <div
-        className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity bg-background/90 backdrop-blur-sm rounded-md border shadow-sm px-0.5 py-0.5"
+        className={`absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1.5 transition-opacity cursor-pointer ${dropdownOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
         onClick={(e) => e.stopPropagation()}
       >
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-7"
-              onClick={toggleStar}
-            >
-              <Star
-                className={
-                  isStarred
-                    ? "size-3.5 text-amber-400 fill-amber-400"
-                    : "size-3.5"
-                }
-              />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">
-            {isStarred ? "Unstar" : "Star"}{" "}
-            <kbd className="ml-1 text-[10px] opacity-60">S</kbd>
-          </TooltipContent>
-        </Tooltip>
-
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-7"
-              onClick={toggleRead}
-            >
-              {isRead ? (
-                <BookX className="size-3.5" />
-              ) : (
-                <BookOpen className="size-3.5" />
-              )}
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">
-            {isRead ? "Mark as unread" : "Mark as read"}{" "}
-            <kbd className="ml-1 text-[10px] opacity-60">M</kbd>
-          </TooltipContent>
-        </Tooltip>
-
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-7"
-              onClick={(e) => moveToLocation("archive", e)}
-            >
-              <Archive className="size-3.5" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">
-            Archive <kbd className="ml-1 text-[10px] opacity-60">E</kbd>
-          </TooltipContent>
-        </Tooltip>
-
         <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-7"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <MoreHorizontal className="size-3.5" />
-                </Button>
-              </DropdownMenuTrigger>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">More actions</TooltipContent>
-          </Tooltip>
-          <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-center bg-background/90 backdrop-blur-sm rounded-md border shadow-sm px-0.5 py-0.5">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-7 cursor-pointer"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <MoreHorizontal className="size-3.5" />
+                  </Button>
+                </DropdownMenuTrigger>
+              </TooltipTrigger>
+              <TooltipContent side="top">More actions</TooltipContent>
+            </Tooltip>
+          </div>
+          <DropdownMenuContent align="start" onClick={(e) => e.stopPropagation()}>
             <DropdownMenuItem onClick={() => setTagDialogOpen(true)}>
               <Tag className="size-4 mr-2" /> Add tag
               <DropdownMenuShortcut>T</DropdownMenuShortcut>
@@ -223,18 +178,24 @@ export const DocumentListItemActions = forwardRef<
               {isRead ? "Mark as unread" : "Mark as read"}
               <DropdownMenuShortcut>M</DropdownMenuShortcut>
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => moveToLocation("inbox")}>
-              <Inbox className="size-4 mr-2" /> Move to Inbox
-              <DropdownMenuShortcut>Shift+E</DropdownMenuShortcut>
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => moveToLocation("later")}>
-              <Clock className="size-4 mr-2" /> Move to Later
-              <DropdownMenuShortcut>L</DropdownMenuShortcut>
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => moveToLocation("archive")}>
-              <Archive className="size-4 mr-2" /> Move to Archive
-              <DropdownMenuShortcut>E</DropdownMenuShortcut>
-            </DropdownMenuItem>
+            {doc.location !== "inbox" && (
+              <DropdownMenuItem onClick={() => moveToLocation("inbox")}>
+                <Inbox className="size-4 mr-2" /> Move to Inbox
+                <DropdownMenuShortcut>Shift+E</DropdownMenuShortcut>
+              </DropdownMenuItem>
+            )}
+            {doc.location !== "later" && (
+              <DropdownMenuItem onClick={() => moveToLocation("later")}>
+                <Clock className="size-4 mr-2" /> Move to Later
+                <DropdownMenuShortcut>L</DropdownMenuShortcut>
+              </DropdownMenuItem>
+            )}
+            {doc.location !== "archive" && (
+              <DropdownMenuItem onClick={() => moveToLocation("archive")}>
+                <Archive className="size-4 mr-2" /> Move to Archive
+                <DropdownMenuShortcut>E</DropdownMenuShortcut>
+              </DropdownMenuItem>
+            )}
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={openOriginal}>
               <ExternalLink className="size-4 mr-2" /> Open original
@@ -243,6 +204,9 @@ export const DocumentListItemActions = forwardRef<
             <DropdownMenuItem onClick={copyUrl}>
               <Copy className="size-4 mr-2" /> Copy URL
               <DropdownMenuShortcut>Shift+C</DropdownMenuShortcut>
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={copyAsMarkdown}>
+              <FileText className="size-4 mr-2" /> Copy as Markdown
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
@@ -254,6 +218,67 @@ export const DocumentListItemActions = forwardRef<
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+
+        {/* Action buttons in their own pill */}
+
+        <div className="flex items-center gap-0.5 bg-background/90 backdrop-blur-sm rounded-md border shadow-sm px-0.5 py-0.5">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-7 cursor-pointer"
+                onClick={toggleStar}
+              >
+                <Star
+                  className={
+                    isStarred
+                      ? "size-3.5 text-amber-400 fill-amber-400"
+                      : "size-3.5"
+                  }
+                />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              {isStarred ? "Unstar" : "Star"}{" "}
+              <kbd className="ml-1 text-[10px] opacity-60">S</kbd>
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-7 cursor-pointer"
+                disabled={doc.location === "later"}
+                onClick={(e) => moveToLocation("later", e)}
+              >
+                <Clock className="size-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              Move to Later <kbd className="ml-1 text-[10px] opacity-60">L</kbd>
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-7 cursor-pointer"
+                disabled={doc.location === "archive"}
+                onClick={(e) => moveToLocation("archive", e)}
+              >
+                <Archive className="size-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              Archive <kbd className="ml-1 text-[10px] opacity-60">E</kbd>
+            </TooltipContent>
+          </Tooltip>
+        </div>
       </div>
 
       {/* Dialogs */}

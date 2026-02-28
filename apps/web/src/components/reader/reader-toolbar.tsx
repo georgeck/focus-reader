@@ -31,6 +31,9 @@ import {
   FolderPlus,
   FileText,
   PanelRightOpen,
+  Tag,
+  BookOpen,
+  BookX,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -40,6 +43,7 @@ import {
 } from "@/components/ui/tooltip";
 import { useApp } from "@/contexts/app-context";
 import { AddToCollectionDialog } from "@/components/dialogs/add-to-collection-dialog";
+import { TagManagerDialog } from "@/components/dialogs/tag-manager-dialog";
 import { ReaderPreferencesPopover } from "./reader-preferences-popover";
 import { invalidateDocumentLists } from "@/lib/documents-cache";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -67,6 +71,7 @@ export function ReaderToolbar({ documentId }: ReaderToolbarProps) {
   } = useApp();
 
   const [collectionDialogOpen, setCollectionDialogOpen] = useState(false);
+  const [tagDialogOpen, setTagDialogOpen] = useState(false);
   const hasPrev = currentDocumentIndex > 0;
   const hasNext = currentDocumentIndex < documentIds.length - 1;
 
@@ -100,6 +105,18 @@ export function ReaderToolbar({ documentId }: ReaderToolbarProps) {
     mutate();
     await invalidateDocumentLists();
     toast(newVal ? "Starred" : "Unstarred");
+  };
+
+  const toggleRead = async () => {
+    if (!doc) return;
+    const newVal = doc.is_read === 1 ? 0 : 1;
+    await apiFetch(`/api/documents/${documentId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ is_read: newVal }),
+    });
+    mutate();
+    await invalidateDocumentLists();
+    toast(newVal ? "Marked as read" : "Marked as unread");
   };
 
   const moveToLocation = async (location: string) => {
@@ -258,18 +275,36 @@ export function ReaderToolbar({ documentId }: ReaderToolbarProps) {
             <TooltipContent>More actions</TooltipContent>
           </Tooltip>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => moveToLocation("inbox")}>
-              <Inbox className="size-4 mr-2" /> Move to Inbox
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => moveToLocation("later")}>
-              <Clock className="size-4 mr-2" /> Move to Later
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => moveToLocation("archive")}>
-              <Archive className="size-4 mr-2" /> Move to Archive
+            <DropdownMenuItem onClick={() => setTagDialogOpen(true)}>
+              <Tag className="size-4 mr-2" /> Add tag
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => setCollectionDialogOpen(true)}>
               <FolderPlus className="size-4 mr-2" /> Add to Collection
             </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={toggleRead}>
+              {doc?.is_read === 1 ? (
+                <BookX className="size-4 mr-2" />
+              ) : (
+                <BookOpen className="size-4 mr-2" />
+              )}
+              {doc?.is_read === 1 ? "Mark as unread" : "Mark as read"}
+            </DropdownMenuItem>
+            {doc?.location !== "inbox" && (
+              <DropdownMenuItem onClick={() => moveToLocation("inbox")}>
+                <Inbox className="size-4 mr-2" /> Move to Inbox
+              </DropdownMenuItem>
+            )}
+            {doc?.location !== "later" && (
+              <DropdownMenuItem onClick={() => moveToLocation("later")}>
+                <Clock className="size-4 mr-2" /> Move to Later
+              </DropdownMenuItem>
+            )}
+            {doc?.location !== "archive" && (
+              <DropdownMenuItem onClick={() => moveToLocation("archive")}>
+                <Archive className="size-4 mr-2" /> Move to Archive
+              </DropdownMenuItem>
+            )}
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={openOriginal}>
               <ExternalLink className="size-4 mr-2" /> Open original
@@ -331,6 +366,13 @@ export function ReaderToolbar({ documentId }: ReaderToolbarProps) {
         open={collectionDialogOpen}
         onOpenChange={setCollectionDialogOpen}
         documentId={documentId}
+      />
+      <TagManagerDialog
+        open={tagDialogOpen}
+        onOpenChange={setTagDialogOpen}
+        documentId={documentId}
+        documentTagIds={doc?.tags?.map((t) => t.id) ?? []}
+        onTagToggle={() => mutate()}
       />
     </>
   );
