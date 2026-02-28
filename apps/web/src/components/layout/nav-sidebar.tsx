@@ -190,7 +190,7 @@ export function NavSidebar({ forceVisible = false }: NavSidebarProps) {
         <div className="mt-4">
           <button
             onClick={() => setSubsOpen(!subsOpen)}
-            className="flex w-full items-center justify-between px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground"
+            className="flex w-full items-center justify-between px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
           >
             <span>Subscriptions</span>
             {subsOpen ? (
@@ -229,7 +229,7 @@ export function NavSidebar({ forceVisible = false }: NavSidebarProps) {
         {/* Collections */}
         <div className="mt-4">
           <div
-            className="flex w-full items-center justify-between px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+            className="flex w-full items-center justify-between px-3 py-1.5 text-xs font-medium text-muted-foreground"
           >
             <button
               onClick={() => setCollectionsOpen(!collectionsOpen)}
@@ -276,7 +276,7 @@ export function NavSidebar({ forceVisible = false }: NavSidebarProps) {
         <div className="mt-4">
           <button
             onClick={() => setViewsOpen(!viewsOpen)}
-            className="flex w-full items-center justify-between px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground"
+            className="flex w-full items-center justify-between px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
           >
             <span>Saved Views</span>
             {viewsOpen ? (
