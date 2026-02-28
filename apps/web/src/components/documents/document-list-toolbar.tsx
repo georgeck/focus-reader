@@ -282,21 +282,7 @@ export function DocumentListToolbar({
               <PanelLeftOpen className="size-4" />
             </Button>
           )}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="h-7 gap-1 px-2 text-sm font-semibold">
-                {title}
-                <ChevronDown className="size-3" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
-              {onToggleBulkMode && (
-                <DropdownMenuItem onClick={onToggleBulkMode}>
-                  Select documents
-                </DropdownMenuItem>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <span className="px-2 text-sm font-semibold">{title}</span>
           {scopeDropdown}
         </div>
       )}
